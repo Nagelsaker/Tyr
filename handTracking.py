@@ -1,8 +1,9 @@
 import cv2
 import glob
+from RealSenseCam import cameraStream
 import mediapipe as mp
 from pathlib import Path
-# from mediapipe.python.solutions.hands import HandLandmark
+
 
 
 class HandTracking:
@@ -10,6 +11,12 @@ class HandTracking:
         self.mpDrawing = mp.solutions.drawing_utils
         self.mpDrawingStyles = mp.solutions.drawing_styles
         self.mpHands = mp.solutions.hands
+
+    def trackStream(self):
+        camStream = cameraStream()
+        camStream.start()
+        # TODO
+
 
     def trackStaticImgs(self, dataDir, saveAnnotations=False):
         imgFiles = glob.glob(f"{dataDir}/imgs/*.jpg")
