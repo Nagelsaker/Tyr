@@ -3,7 +3,7 @@ import numpy as np
 import cv2
 
 
-class cameraStream:
+class CameraStream:
     def __init__(self):
         self.pipeline = rs.pipeline()
 
@@ -52,7 +52,7 @@ class cameraStream:
         images = np.hstack((colorImage, depthImage))
         return images
 
-    def getAlignedImages(self, clippingDistanceInMeters=1):
+    def getAlignedImages(self, clippingDistanceInMeters=0):
         '''
         Aligns the depth image with the RGB image. Useful for extracting depth from detections.
 
@@ -79,20 +79,27 @@ class cameraStream:
 
         # Validate that both frames are valid
         if not alignedDepthFrame or not colorFrame:
-            return
+            return -1
 
         depthImage = np.asanyarray(alignedDepthFrame.get_data())
         colorImage = np.asanyarray(colorFrame.get_data())
 
         depthImage3d = np.dstack((depthImage,depthImage,depthImage)) #depth image is 1 channel, color is 3 channels
         # Remove background - Set pixels further than clipping_distance to grey
-        if clippingDistance > 0:
+        if type(clippingDistance) is np.ndarray:
             grey_color = 153
-            colorImage = np.where((depthImage3d > clippingDistance) | (depthImage3d <= 0), grey_color, colorImage)
+            colorImage = np.where((depthImage3d > clippingDistance[1]) | (depthImage3d <= clippingDistance[0]), grey_color, colorImage)
 
-        depthColormap = cv2.applyColorMap(cv2.convertScaleAbs(depthImage, alpha=0.03), cv2.COLORMAP_JET)
-        images = np.hstack((colorImage, depthColormap))
+        depthColormap = self.getColorMap(depthImage)
+
+        depthImgInMeter = (depthImage3d * self.depthScale)
+
+        images = np.hstack((colorImage, depthImgInMeter))
         return images
+    
+    def getColorMap(self, depthImage):
+        depthColormap = cv2.applyColorMap(cv2.convertScaleAbs(depthImage, alpha=0.03), cv2.COLORMAP_JET)
+        return depthColormap
 
     def showImages(self, images):
         '''
