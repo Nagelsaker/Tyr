@@ -1,9 +1,11 @@
 import cv2
 import glob
+import rclpy
 import numpy as np
 import mediapipe as mp
 from pathlib import Path
 from RealSenseCam import CameraStream
+from Communication import EndEffPositionClient
 
 
 
@@ -22,7 +24,8 @@ class HandTracking:
 
     def getLiveLandamarks(self, visualize=True):
         with self.mpHands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
-            images = self.camStream.getAlignedImages(clippingDistanceInMeters=np.array([0.3, 1]))
+            # images = self.camStream.getAlignedImages(clippingDistanceInMeters=np.array([0.3, 1]))
+            images = self.camStream.getAlignedImages(clippingDistanceInMeters=0)
             # images = self.camStream.getAlignedImages()
             if np.all(images == -1):
                 return -1 # Empty frames
@@ -91,7 +94,7 @@ class HandTracking:
 
             
     def visualizeLiveTracking(self):
-        camStream = cameraStream()
+        camStream = CameraStream()
         camStream.start()
         
         with self.mpHands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
@@ -168,11 +171,28 @@ class HandTracking:
                             f"{dataDir}/annotatedImgs/" + str(idx) + ".png", annotatedImage)
 
 if __name__ == "__main__":
+    rclpy.init()
     handTracker = HandTracking()
+    positionClient = EndEffPositionClient()
     # handTracker.trackStaticImgs("dataset_1", saveAnnotations=True)
     # handTracker.visualizeLiveTracking()
+    minDepth = 0.3
+    maxDepth = 0.6
+    pathTime = 0.3
+
+    minRobotDepth = 0.05
+    maxRobotDepth = 0.268
 
     handTracker.startTrackingFromStream()
+    prevHandDepth = minDepth
     while True: # Tracking loop
-        handTracker.getLiveLandamarks()
+        handDepth,_,_ = handTracker.getLiveLandamarks()
+        if handDepth < minDepth or handDepth > maxDepth:
+            handDepth = prevHandDepth
+        else:
+            prevHandDepth = handDepth
+
+        x_pos = (handDepth - minDepth) / (maxDepth - minDepth) * (maxRobotDepth - minRobotDepth) + minRobotDepth
+        positionClient.send_request(x_pos, pathTime)
+        print(f"Hand depth: {handDepth}, Robot depth: {x_pos}")
     handTracker.endStream() # Remember to end the stream
