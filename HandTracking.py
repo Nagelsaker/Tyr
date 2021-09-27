@@ -178,7 +178,7 @@ if __name__ == "__main__":
     # handTracker.visualizeLiveTracking()
     minDepth = 0.3
     maxDepth = 0.6
-    pathTime = 0.3
+    pathTime = 0.2
 
     minRobotDepth = 0.05
     maxRobotDepth = 0.268
