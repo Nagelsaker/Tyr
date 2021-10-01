@@ -1,6 +1,6 @@
-import sys
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import String
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Quaternion
@@ -9,7 +9,7 @@ from open_manipulator_msgs.srv import SetKinematicsPose
 
 
 
-class EndEffPositionClient(Node):
+class SetPositionClient(Node):
 
     def __init__(self):
         super().__init__('test_node_1234')
@@ -18,21 +18,23 @@ class EndEffPositionClient(Node):
             self.get_logger().info('service not available, waiting again...')
         self.req = SetKinematicsPose.Request()
 
-    def send_request(self, x_pose, pathTime):
+    def send_request(self, goalPose={"position": {"x" : 0.1, "y" : 0.0, "z" : 0.22},
+                                "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w" : 1.0}},
+                                pathTime=1.5):
         
         pose = Pose()
 
         point = Point()
-        point.x = x_pose
-        point.y = 0.0
-        point.z = 0.22
+        point.x = goalPose["position"]["x"]
+        point.y = goalPose["position"]["y"]
+        point.z = goalPose["position"]["z"]
         pose.position = point
 
         quaternion = Quaternion()
-        quaternion.x = 0.0
-        quaternion.y = 0.0
-        quaternion.w = 0.0
-        quaternion.z = 0.0
+        quaternion.x = goalPose["orientation"]["x"]
+        quaternion.y = goalPose["orientation"]["y"]
+        quaternion.w = goalPose["orientation"]["z"]
+        quaternion.z = goalPose["orientation"]["w"]
         pose.orientation = quaternion
         
         kinematics_pose = KinematicsPose()
@@ -49,27 +51,42 @@ class EndEffPositionClient(Node):
         self.future = self.cli.call_async(self.req)
 
 
+
+
+class PoseSubscriber(Node):
+
+    def __init__(self):
+        super().__init__('kinematics_pose')
+        self.subscription = self.create_subscription(
+            KinematicsPose,
+            '/kinematics_pose',
+            self.listener_callback,
+            10)
+        self.subscription  # prevent unused variable warning
+        self.pose={"position": {"x" : 0.1, "y" : 0.0, "z" : 0.0},
+                                "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w" : 1.0}}
+
+    def listener_callback(self, msg):
+        self.pose["position"]["x"] = msg.pose.position.x
+        self.pose["position"]["y"] = msg.pose.position.y
+        self.pose["position"]["z"] = msg.pose.position.z
+        self.pose["orientation"]["x"] = msg.pose.orientation.x
+        self.pose["orientation"]["y"] = msg.pose.orientation.y
+        self.pose["orientation"]["z"] = msg.pose.orientation.z
+        self.pose["orientation"]["w"] = msg.pose.orientation.w
+    
+    def getPose(self):
+        return self.pose
+
+
 def main(args=None):
     rclpy.init(args=args)
 
-    minimal_client = EndEffPositionClient()
-    minimal_client.send_request(0.15)
+    poseSubscriber = PoseSubscriber()
 
-    # while rclpy.ok():
-    #     rclpy.spin_once(minimal_client)
-    #     if minimal_client.future.done():
-    #         try:
-    #             response = minimal_client.future.result()
-    #         except Exception as e:
-    #             minimal_client.get_logger().info(
-    #                 'Service call failed %r' % (e,))
-    #         else:
-    #             minimal_client.get_logger().info(
-    #                 'Result of add_two_ints: for %d + %d = %d' %
-    #                 (minimal_client.req.a, minimal_client.req.b, response.sum))
-    #         break
+    rclpy.spin_once(poseSubscriber)
 
-    minimal_client.destroy_node()
+    poseSubscriber.destroy_node()
     rclpy.shutdown()
 
 

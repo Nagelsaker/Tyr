@@ -1,3 +1,4 @@
+from SimpleController import SimpleController
 import cv2
 import glob
 import rclpy
@@ -5,7 +6,7 @@ import numpy as np
 import mediapipe as mp
 from pathlib import Path
 from RealSenseCam import CameraStream
-from Communication import EndEffPositionClient
+from Communication import SetPositionClient, PoseSubscriber
 
 
 
@@ -46,6 +47,7 @@ class HandTracking:
             handPoints = {}
             handIdx = 0
             handDepth = -1
+            estHandPosition = -1
 
             if results.multi_hand_landmarks:
                 for handLandmarks in results.multi_hand_landmarks:
@@ -70,7 +72,7 @@ class HandTracking:
             if visualize:
                 self.drawLandmarks(results, image)
 
-            return handDepth, handPoints, image
+            return handDepth, estHandPosition, handPoints, image
 
 
     def drawLandmarks(self, results, image):
@@ -170,29 +172,93 @@ class HandTracking:
                         cv2.imwrite(
                             f"{dataDir}/annotatedImgs/" + str(idx) + ".png", annotatedImage)
 
-if __name__ == "__main__":
+
+def depthDemonstration():
     rclpy.init()
     handTracker = HandTracking()
-    positionClient = EndEffPositionClient()
-    # handTracker.trackStaticImgs("dataset_1", saveAnnotations=True)
-    # handTracker.visualizeLiveTracking()
-    minDepth = 0.3
-    maxDepth = 0.6
-    pathTime = 0.2
+    positionClient = SetPositionClient()
+    poseSubscriber = PoseSubscriber()
+    
+    rclpy.spin_once(poseSubscriber) # Update pose
+    pose = poseSubscriber.getPose()
 
-    minRobotDepth = 0.05
-    maxRobotDepth = 0.268
+    # pose = {"position": {"x" : 0.0, "y" : 0.0, "z" : 0.22},
+    #         "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w" : 1.0}}
+
+    minDepth = 0.25
+    maxDepth = 0.40
+    pathTime = 0.2
+    maxRobotDepth = 0.30
+
+    minRobotDepth = 0.08
+    maxRobotDepth = 0.30
 
     handTracker.startTrackingFromStream()
     prevHandDepth = minDepth
-    while True: # Tracking loop
-        handDepth,_,_ = handTracker.getLiveLandamarks()
-        if handDepth < minDepth or handDepth > maxDepth:
-            handDepth = prevHandDepth
-        else:
-            prevHandDepth = handDepth
+    try:
+        while True: # Tracking loop
+            handDepth,_,_,_ = handTracker.getLiveLandamarks()
+            if handDepth < minDepth or handDepth > maxDepth:
+                handDepth = prevHandDepth
+            else:
+                prevHandDepth = handDepth
 
-        x_pos = (handDepth - minDepth) / (maxDepth - minDepth) * (maxRobotDepth - minRobotDepth) + minRobotDepth
-        positionClient.send_request(x_pos, pathTime)
-        print(f"Hand depth: {handDepth}, Robot depth: {x_pos}")
-    handTracker.endStream() # Remember to end the stream
+            pos = (maxDepth - handDepth) / (maxDepth - minDepth) * (maxRobotDepth - minRobotDepth) + minRobotDepth
+            pose["position"]["z"] = pos
+            positionClient.send_request(pose, pathTime)
+            print(f"Hand depth: {handDepth}, Robot depth: {pos}")
+    except KeyboardInterrupt:
+        print("\nExiting..")
+        handTracker.endStream() # Remember to end the stream
+        poseSubscriber.destroy_node()
+        rclpy.shutdown()
+
+def main():
+    rclpy.init()
+    handTracker = HandTracking()
+    positionClient = SetPositionClient()
+    poseSubscriber = PoseSubscriber()
+    controller = SimpleController(1080, 1920)
+
+    # pose = {"position": {"x" : 0.0, "y" : 0.0, "z" : 0.22},
+    #         "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w" : 1.0}}
+
+    minDepth = 0.3
+    maxDepth = 0.6
+    pathTime = 0.25
+
+    handTracker.startTrackingFromStream()
+    prevHandDepth = minDepth
+
+    rclpy.spin_once(poseSubscriber) # Update pose
+    prevPose = poseSubscriber.getPose()
+    z = prevPose["position"]["z"]
+    try:
+        while True: # Tracking loop
+            rclpy.spin_once(poseSubscriber) # Update pose
+            currentPose = poseSubscriber.getPose()
+            handDepth, handPosition,_,_ = handTracker.getLiveLandamarks()
+
+            if (handDepth == -1 or type(handPosition) != np.ndarray):   continue
+
+            newPose = controller.computeNewPose(currentPose, handDepth, handPosition, prevPose)
+            x = newPose["position"]["x"]
+            y = newPose["position"]["y"]
+            newPose["position"]["z"] = z
+            print(f"X: {x}, Y: {y}, Z: {z}")
+
+            positionClient.send_request(newPose, pathTime)
+            prevPose = newPose
+            print(f"Hand depth: {handDepth}")
+    except KeyboardInterrupt:
+        print("\nExiting..")
+        handTracker.endStream() # Remember to end the stream
+        poseSubscriber.destroy_node()
+        rclpy.shutdown()
+
+
+
+
+if __name__ == "__main__":
+    depthDemonstration()
+    # main()
