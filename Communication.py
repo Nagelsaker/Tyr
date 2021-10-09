@@ -18,7 +18,7 @@ class SetPositionClient(Node):
             self.get_logger().info('service not available, waiting again...')
         self.req = SetKinematicsPose.Request()
 
-    def send_request(self, goalPose={"position": {"x" : 0.1, "y" : 0.0, "z" : 0.22},
+    def sendRequest(self, goalPose={"position": {"x" : 0.1, "y" : 0.0, "z" : 0.22},
                                 "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w" : 1.0}},
                                 pathTime=1.5):
         
@@ -67,6 +67,10 @@ class PoseSubscriber(Node):
                                 "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w" : 1.0}}
 
     def listener_callback(self, msg):
+        '''
+        In:
+            msg: 
+        '''
         self.pose["position"]["x"] = msg.pose.position.x
         self.pose["position"]["y"] = msg.pose.position.y
         self.pose["position"]["z"] = msg.pose.position.z

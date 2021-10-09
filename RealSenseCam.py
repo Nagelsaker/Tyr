@@ -33,7 +33,7 @@ class CameraStream:
         Returns raw color and depth images
 
         Out:
-            images: (H x 2*W x 3) Array
+            images: (H x 2*W x 3 Array)
                 Color image and depth image horizontally stacked
         '''
         frames = self.pipeline.wait_for_frames()
@@ -74,7 +74,7 @@ class CameraStream:
         alignedFrames = self.align.process(frames)
 
         # Get aligned frames
-        alignedDepthFrame = alignedFrames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
+        alignedDepthFrame = alignedFrames.get_depth_frame()
         colorFrame = alignedFrames.get_color_frame()
 
         # Validate that both frames are valid
@@ -123,7 +123,7 @@ class CameraStream:
 
 
 if __name__ == "__main__":
-    cs = cameraStream()
+    cs = CameraStream()
     cs.start()
     try:
         while True:
