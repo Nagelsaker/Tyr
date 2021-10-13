@@ -14,6 +14,7 @@
 
 import utils
 import datetime
+import time
 import numpy as np
 
 
@@ -39,8 +40,15 @@ class HandModel():
     def __init__(self, type):
         self.fingerAngles = {}
         self.slidingWindow = []
+        self.depthWindow = []
         self.windowSize = 10
         self.openFingers = np.ones(5)
+        self.gesture = 0
+
+        self.timeSinceLastValidGesture = 99999
+        self.gamma = 0.5 # Seconds without valid gesture before stopping
+        self.acceptedDepthVar = 0.03
+        self.gestureDetectedTime = time.time()
 
     def addMeasurement(self, landmarks):
         if landmarks != {}:
@@ -184,7 +192,17 @@ class HandModel():
         return H
 
     def estimateGesture(self):
-        for idx in range(5):
+        # Thumb
+        finger = self.fingerAngles[0]
+        angles = np.array(self.fingerAngles[0][1:])[:,0]
+        offset = np.array([np.deg2rad(-15), np.deg2rad(20)])
+        threshold = np.array([np.deg2rad(15), np.deg2rad(20)])
+        if np.any(np.abs(angles - offset) > threshold):
+            self.openFingers[0] = 0
+        else:
+            self.openFingers[0] = 1
+
+        for idx in range(1, 5):
             finger = self.fingerAngles[idx]
             # Skipping first finger angle for now
             angles = np.array(finger[1:]).flatten()
@@ -195,7 +213,84 @@ class HandModel():
                 self.openFingers[idx] = 0
             else:
                 self.openFingers[idx] = 1
-        print(f"Open fingers: {self.openFingers} \r", end="")
+
+        # print(f"Open fingers:\t{self.openFingers} \r", end="")
+        # print(f"\nTheta:\t\t{np.rad2deg(np.array(self.fingerAngles[0][1:])[:,0])} \r", end="")
+        # print(f"\nBeta:\t\t{np.rad2deg(np.array(self.fingerAngles[0][1:])[:,1])} \r", end="")
+
+        if all(self.openFingers == 1):
+            # All fingers open
+            self.gesture = 0
+            self.timeSinceLastValidGesture = 0
+            self.gestureDetectedTime = time.time()
+        elif self.openFingers[0] == 1 and all(self.openFingers[1:] == 0):
+            # Thumb open
+            self.gesture = 3
+            self.timeSinceLastValidGesture = 0
+            self.gestureDetectedTime = time.time()
+        elif all(self.openFingers == 0):
+            # All fingers closed
+            self.gesture = 4
+            self.timeSinceLastValidGesture = 0
+            self.gestureDetectedTime = time.time()
+        elif self.openFingers[0] == 0 and self.openFingers[1] == 1 and all(self.openFingers[2:] == 0):
+            # Index open
+            self.gesture = 5
+            self.timeSinceLastValidGesture = 0
+            self.gestureDetectedTime = time.time()
+        else:
+            # No valid gesture detected
+            if self.timeSinceLastValidGesture < self.gamma:
+                t = time.time()
+                self.timeSinceLastValidGesture = (t - self.gestureDetectedTime)/ 1000
+            else:
+                self.gesture = 0
+
+    def getPalmLocation(self):
+        '''
+        Estimates the palm location by averaging over the positions of points
+        0, 1, 5, 9, 13, and 17.
+
+        Out:
+            (3x1 Array(Float))
+        '''
+        try:
+            latestLandmarks = self.slidingWindow[-1]
+        except Exception:
+            print("Error getting palm location: No hand detected yet!")
+            return
+        x = np.array([latestLandmarks[0][0]['X'], latestLandmarks[0][1]['X'], latestLandmarks[0][5]['X'],
+                    latestLandmarks[0][9]['X'], latestLandmarks[0][13]['X'], latestLandmarks[0][17]['X']]).mean()
+        y = np.array([latestLandmarks[0][0]['Y'], latestLandmarks[0][1]['Y'], latestLandmarks[0][5]['Y'],
+                    latestLandmarks[0][9]['Y'], latestLandmarks[0][13]['Y'], latestLandmarks[0][17]['Y']]).mean()
+        z = np.array([latestLandmarks[0][0]['Z'], latestLandmarks[0][1]['Z'], latestLandmarks[0][5]['Z'],
+                    latestLandmarks[0][9]['Z'], latestLandmarks[0][13]['Z'], latestLandmarks[0][17]['Z']]).mean()
+        return np.array([x, y, z])
+
+    def getHandDepth(self):
+        '''
+        Returns the average hand depth from all 21 landmarks, with outliers removed
+        '''
+        try:
+            latestLandmarks = self.slidingWindow[-1]
+        except Exception:
+            print("Error getting hand depth: No hand detected yet!")
+            return 0, 0
+        depths = np.array([round(latestLandmarks[0][i]['Depth'], 3) for i in range(len(latestLandmarks[0]))])
+        var = np.var(depths)
+        estDepth = np.median(depths) # Reduces the effect from outliers
+        mean = np.mean(depths)
+
+        if var < self.acceptedDepthVar or len(self.depthWindow) == 0:
+            self.depthWindow.append([estDepth, var])
+            if len(self.depthWindow) > self.windowSize:
+                self.depthWindow.pop(0)
+        else:
+            estDepth = np.mean(np.array(self.depthWindow)[:,0])
+            var = np.var(np.array(self.depthWindow)[:,0])
+        # print(f"Estimator :\t{estDepth:.3f}\t\t Mean: {mean:.3f}\t\tVar: \t{var:.3f} \r", end="")
+        return estDepth, var
+
 
     def getFingerAngles(self):
         '''
@@ -203,6 +298,9 @@ class HandModel():
             (Dict = "0"-"4": 1x2 Array(Float))
         '''
         return self.fingerAngles
+
+    def getCurrentGesture(self):
+        return self.gesture
 
     def log(self, measurement):
         timestamp = datetime.datetime.now()
