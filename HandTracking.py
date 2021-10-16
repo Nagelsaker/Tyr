@@ -107,7 +107,7 @@ class HandTracking:
                 self.drawLandmarks(results, image)
 
             # return handDepth, estHandPosition, handPoints, image
-            return handPoints, image # USE this
+            return handPoints, image, results # USE this
 
 
     def drawLandmarks(self, results, image):

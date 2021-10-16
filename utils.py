@@ -1,5 +1,17 @@
+import math
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
+def euler_from_quaternion(quaternion):
+    r = R.from_quat(quaternion)
+    euler = r.as_euler("xyz")
+    return euler[0], euler[1], euler[2] # in radians
+
+def quaternion_from_euler(euler):
+    roll_x, pitch_y, yaw_z = euler
+    r = R.from_euler('xyz', euler, degrees=False)
+    quaternion = r.as_quat()
+    return quaternion
 
 def toHomogeneous(arr):
     '''

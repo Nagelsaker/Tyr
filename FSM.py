@@ -1,12 +1,12 @@
-from Controller import Controller, Obstacle
-import time
 import numpy as np
 from HandTracking import HandTracking
-from HandModel import HandModel
+from OperatorPanel import visualize
+from Controller import Controller, Obstacle
+from HandModel import *
 
 def fsm():
-    depthRange = [0.28, 0.42]
-    pathTime = 0.2
+    depthRange = [0.35, 0.85]
+    pathTime = 0.6 # 0.2
     imgWidth = 1920
     imgHeight = 1080
 
@@ -20,7 +20,7 @@ def fsm():
 
     handTracker = HandTracking()
     hm = HandModel(type="left")
-    controller = Controller(imgWidth, imgHeight, depthRange, obstacles=obstacles, pathTime=pathTime)
+    controller = Controller(imgWidth, imgHeight, depthRange, pathTime=pathTime, obstacles=obstacles)
 
     standardPose = controller.getPose()
     standardPose["position"]["x"] = 0.148
@@ -31,7 +31,8 @@ def fsm():
 
     try:
         while True: # Tracking loop
-            handPoints, image = handTracker.getLiveLandamarks(visualize=True)
+            handPoints, image, results = handTracker.getLiveLandamarks()
+            visualize(results, image) # Temp TODO Switch with an OperatorPanel object
             hm.addMeasurement(handPoints)
 
             controller.updateRobotPose()
@@ -43,24 +44,30 @@ def fsm():
                 continue
             
             pos = controller.getPose()["position"]
-            print(f"Current gesture:\t{currentGesture}\tPosition:\t{pos}\r", end="")
+            # print(f"Current gesture:\t{currentGesture}\tPosition:\t{pos}\r", end="")
 
-            if currentGesture == 0: # Stop moving
+            if currentGesture == STOP: # Stop moving
                 # TODO?
                 pass
-            elif currentGesture == 1: # Grip
+            elif currentGesture == GRIP: # Grip
+                controller.requestGripperDistance(-0.010)
+            elif currentGesture == UNGRIP: # Release grip
+                controller.requestGripperDistance(0.010)
                 pass
-            elif currentGesture == 2: # Release grip
-                pass
-            elif currentGesture == 3: # Turn in the xy plane
+            elif currentGesture == TURN: # Turn in the xy plane
                 controller.incrementXY(palm)
                 pass
-            elif currentGesture == 4: # Move in rz plane
+            elif currentGesture == MOVE: # Move in rz plane
                 controller.incrementRadiusAndZ(palm, depth)
                 pass
-            elif currentGesture == 5: # Move to standard pose
-                controller.requestPose(standardPose, time=0.8)
-                # time.sleep(3)
+            elif currentGesture == STANDARD_POSE: # Move to standard pose
+                # controller.requestPose(standardPose, time=0.8)
+                # controller.requestGripperDistance(-0.010)
+                pass
+            elif currentGesture == TILT_DOWN: # Tilt down
+                controller.incrementTilt("Down")
+            elif currentGesture == TILT_UP: # Tilt up
+                controller.incrementTilt("Up")
 
     except KeyboardInterrupt:
         print("\nExiting..")

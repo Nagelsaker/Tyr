@@ -9,10 +9,11 @@
 import copy
 import rclpy
 import numpy as np
-from Communication import SetPositionClient, PoseSubscriber
+from utils import euler_from_quaternion, quaternion_from_euler
+from Communication import SetPositionClient, SetGripperDistanceClient, PoseSubscriber, SetOrientationClient, JointPositionSubscriber, SetJointPositionClient
 
 class Controller():
-    def __init__(self, imgWidth, imgHeight, depthRange, obstacles=None, pathTime=0.2):
+    def __init__(self, imgWidth, imgHeight, depthRange, pathTime, obstacles=None):
         rclpy.init()
         self.obstacles = obstacles
         self.pathTime = pathTime
@@ -20,19 +21,39 @@ class Controller():
         self.imgHeight = imgHeight
         self.depthRange = depthRange
 
+        self.K_p_a = 1 #0.5
+        self.K_p_r = 0.20 #0.14 # 0.07
+        self.K_p_z = 0.26 #0.13
+        self.K_p_t = 0.30
+
         self.goal = np.array([-99, -99, -99])
 
         self.poseSubscriber = PoseSubscriber()
         self.positionClient = SetPositionClient()
+        self.orientationClient = SetOrientationClient()
+        self.gripperDistanceClient = SetGripperDistanceClient()
+        self.jointPositionClient = SetJointPositionClient()
+        self.jointSubscriber =  JointPositionSubscriber()
 
         self.pose = self.poseSubscriber.getPose()
+        self.jointPositions = self.jointSubscriber.getPositions()
         self.desiredPose = self.pose
 
     def requestPose(self, desiredPose, time=None):
         if time is None: time = self.pathTime
         self.positionClient.sendRequest(desiredPose, time)
         # print(f"Sim: Setting position {desiredPose}")
-        pass
+
+    def requestOrientation(self, desiredOrientation, time=None):
+        if time is None: time = self.pathTime
+        self.orientationClient.sendRequest(desiredOrientation, time)
+
+    def requestJointPositions(self, desiredPositions, time=None):
+        if time is None: time = self.pathTime
+        self.jointPositionClient.sendRequest(desiredPositions, time)
+
+    def requestGripperDistance(self, desiredPosition):
+            self.gripperDistanceClient.sendRequest(desiredPosition)
 
     def setGoal(self, point):
         pass
@@ -45,11 +66,8 @@ class Controller():
         rho = np.sqrt(x**2 + y**2 + z**2)
         alpha = np.arctan2(y, x)
 
-        K_p_r = 0.07 # TODO: Tune
-        K_p_z = 0.13 # TODO: Tune
-
         # In/Out movement
-        r_delta = (palmPos[1] - 1/2)*K_p_r
+        r_delta = (palmPos[1] - 1/2)*self.K_p_r
         r_new = r + r_delta
         
         # print(f"D: {depth}")
@@ -59,7 +77,7 @@ class Controller():
             else:
                 depth = self.depthRange[1]
 
-        z_delta = (-1)*(depth - self.depthRange[0] - (self.depthRange[1]-self.depthRange[0])/2) / (self.depthRange[1] - self.depthRange[0]) * K_p_z
+        z_delta = (-1)*(depth - self.depthRange[0] - (self.depthRange[1]-self.depthRange[0])/2) / (self.depthRange[1] - self.depthRange[0]) * self.K_p_z
         z_new = z + z_delta
 
         # print(f"Moving in directions: r={r_delta/np.abs(r_delta)}\t\tz={z_delta/np.abs(z_delta)} \r", end="")
@@ -84,7 +102,6 @@ class Controller():
     def incrementXY(self, palmPos):
         # Moves downwards in z direction as well. TODO: Possibly recalibrate
         # Turns only to the left
-        K_p_a = 0.5
 
         x = self.pose["position"]["x"]
         y = self.pose["position"]["y"]
@@ -93,7 +110,7 @@ class Controller():
         r = np.sqrt(x**2 + y**2)
         alpha = np.arctan2(y, x)
 
-        alpha_delta = (palmPos[0] - 1/2) * K_p_a
+        alpha_delta = (palmPos[0] - 1/2) * self.K_p_a
 
         alpha_new = alpha + alpha_delta
         x_new = r * np.cos(alpha_new)
@@ -110,6 +127,16 @@ class Controller():
             self.requestPose(newPose)
         else:
             print("Obstacle Alert!")
+
+    def incrementTilt(self, dir):
+        gain = self.K_p_t
+        if dir == "Up": gain*= -1
+
+        jointPositions = self.getJointPositions()
+        jointPositions["joint4"] += gain
+        self.requestJointPositions(jointPositions)
+
+
 
     def incrementGripper(self, palmPos):
         pass
@@ -130,9 +157,14 @@ class Controller():
     def getPose(self):
         return copy.deepcopy(self.pose)
 
+    def getJointPositions(self):
+        return copy.deepcopy(self.jointPositions)
+
     def updateRobotPose(self):
         rclpy.spin_once(self.poseSubscriber) # Update pose
         self.pose = self.poseSubscriber.getPose()
+        rclpy.spin_once(self.jointSubscriber) # Update positions
+        self.jointPositions = self.jointSubscriber.getPositions()
     
     def endController(self):
         self.poseSubscriber.destroy_node()

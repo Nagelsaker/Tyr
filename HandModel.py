@@ -18,6 +18,17 @@ import time
 import numpy as np
 
 
+# Constants
+STOP = 0
+GRIP = 1
+UNGRIP = 2
+TURN = 3
+MOVE = 4
+STANDARD_POSE = 5
+TILT_DOWN = 6
+TILT_UP = 7
+
+
 class HandModel():
     '''
     Fingers: [thumb, index, middle, ring, pinky]
@@ -36,6 +47,10 @@ class HandModel():
                 [0, 0, 0, 0, 0]
         5:  Move to standard pose
                 [0, 1, 0, 0, 0]
+        6:
+            Tilt Down
+        7:
+            Tilt Up
     '''
     def __init__(self, type):
         self.fingerAngles = {}
@@ -48,7 +63,13 @@ class HandModel():
         self.timeSinceLastValidGesture = 99999
         self.gamma = 0.5 # Seconds without valid gesture before stopping
         self.acceptedDepthVar = 0.03
-        self.gestureDetectedTime = time.time()
+        self.gestureDetectedTime = np.ones(8)*time.time()
+        self.gripperTimer = 0
+        self.wristTimer = 0
+        self.timerThreshold = 0.8
+        self.wristAngle_threshold = [-17, 17]
+
+        self.index_threshold = np.deg2rad([25, 40])
 
     def addMeasurement(self, landmarks):
         if landmarks != {}:
@@ -157,14 +178,6 @@ class HandModel():
 
             self.fingerAngles[int((i-1)/4)] = angles
 
-        # # Debugging
-        # import time
-        # time.sleep(0.2)
-        # a = np.array(self.fingerAngles[0])*180/np.pi
-        # b = np.array(self.fingerAngles[2])*180/np.pi
-        # # print(f"Thumb angles: {a[:,0]}")
-        # print(f"Middle finger angles: {b[:,0]}")
-
 
     def calculateTransformation(self, theta, beta, translation):
         '''
@@ -186,21 +199,35 @@ class HandModel():
 
         H_i_prev = utils.transformationMatrix(R, translation)
 
-        # Inverse the calculated matrix, so that the transform "works in the direction wrist -> finger tip"
+        # Inverse the calculated matrix, so that the transform "works in the general direction wrist -> finger tip"
         H = np.linalg.inv(H_i_prev)
 
         return H
+
+
+    def estimateWristAngle(self):
+        latestLandmarks = self.slidingWindow[-1]
+        wristDepth = latestLandmarks[0][0]["Depth"]
+        p0 = np.array([latestLandmarks[0][0]["X"], latestLandmarks[0][0]["Y"], 0])
+        p5 = np.array([latestLandmarks[0][5]["X"], latestLandmarks[0][5]["Y"], latestLandmarks[0][5]["Depth"] - wristDepth])
+        p9 = np.array([latestLandmarks[0][9]["X"], latestLandmarks[0][9]["Y"], latestLandmarks[0][9]["Depth"] - wristDepth])
+        p13 = np.array([latestLandmarks[0][13]["X"], latestLandmarks[0][13]["Y"], latestLandmarks[0][13]["Depth"] - wristDepth])
+        p17 = np.array([latestLandmarks[0][17]["X"], latestLandmarks[0][17]["Y"], latestLandmarks[0][17]["Depth"] - wristDepth])
+        p_avg = (p5 + p9 + p13 + p17)/4
+
+        dist_xy = np.linalg.norm(p_avg[:2] - p0[:2])
+        wristAngle = np.rad2deg(np.arctan2(p_avg[2], dist_xy))
+        return wristAngle
 
     def estimateGesture(self):
         # Thumb
         finger = self.fingerAngles[0]
         angles = np.array(self.fingerAngles[0][1:])[:,0]
-        offset = np.array([np.deg2rad(-15), np.deg2rad(20)])
-        threshold = np.array([np.deg2rad(15), np.deg2rad(20)])
-        if np.any(np.abs(angles - offset) > threshold):
-            self.openFingers[0] = 0
-        else:
+        threshold = np.array([np.deg2rad(-15), np.deg2rad(-15)])
+        if np.all(angles > threshold):
             self.openFingers[0] = 1
+        else:
+            self.openFingers[0] = 0
 
         for idx in range(1, 5):
             finger = self.fingerAngles[idx]
@@ -214,35 +241,74 @@ class HandModel():
             else:
                 self.openFingers[idx] = 1
 
-        # print(f"Open fingers:\t{self.openFingers} \r", end="")
-        # print(f"\nTheta:\t\t{np.rad2deg(np.array(self.fingerAngles[0][1:])[:,0])} \r", end="")
-        # print(f"\nBeta:\t\t{np.rad2deg(np.array(self.fingerAngles[0][1:])[:,1])} \r", end="")
+        indexFinger = self.fingerAngles[1]
+        index_beta_2 = indexFinger[0][1]
+        index_beta_3 = indexFinger[1][1]
+
+        wristAngle = self.estimateWristAngle()
+        print(f"Angle: {wristAngle:.2f} \r", end="")
 
         if all(self.openFingers == 1):
             # All fingers open
-            self.gesture = 0
+            self.gesture = STOP
             self.timeSinceLastValidGesture = 0
-            self.gestureDetectedTime = time.time()
+            self.gestureDetectedTime[0] = time.time()
         elif self.openFingers[0] == 1 and all(self.openFingers[1:] == 0):
             # Thumb open
-            self.gesture = 3
-            self.timeSinceLastValidGesture = 0
-            self.gestureDetectedTime = time.time()
-        elif all(self.openFingers == 0):
-            # All fingers closed
-            self.gesture = 4
-            self.timeSinceLastValidGesture = 0
-            self.gestureDetectedTime = time.time()
+            if wristAngle > self.wristAngle_threshold[1]:
+                # Tilt end-effector downwards
+                t = time.time()
+                if self.wristTimer == 0 and np.argmax(self.gestureDetectedTime) != 6:
+                    self.wristTimer = time.time()
+                if np.argmax(self.gestureDetectedTime) == 6 or t - self.wristTimer > self.timerThreshold:
+                    self.gesture = TILT_DOWN
+                    self.timeSinceLastValidGesture = 0
+                    self.gestureDetectedTime[6] = time.time()
+            elif wristAngle < self.wristAngle_threshold[0]:
+                # Tilt end-effector upwards
+                t = time.time()
+                if self.wristTimer == 0 and np.argmax(self.gestureDetectedTime) != 7:
+                    self.wristTimer = time.time()
+                if np.argmax(self.gestureDetectedTime) == 7 or t - self.wristTimer > self.timerThreshold:
+                    self.gesture = TILT_UP
+                    self.timeSinceLastValidGesture = 0
+                    self.gestureDetectedTime[7] = time.time()
+            else:
+                self.gesture = TURN
+                self.timeSinceLastValidGesture = 0
+                self.gestureDetectedTime[3] = time.time()
         elif self.openFingers[0] == 0 and self.openFingers[1] == 1 and all(self.openFingers[2:] == 0):
             # Index open
-            self.gesture = 5
+            self.gesture = UNGRIP
             self.timeSinceLastValidGesture = 0
-            self.gestureDetectedTime = time.time()
+            self.gestureDetectedTime[2] = time.time()
+        elif np.abs(index_beta_2) < self.index_threshold[0] and np.abs(index_beta_3) > self.index_threshold[1] and all(self.openFingers == 0):
+            # Index halfway open
+            t = time.time()
+            if self.gripperTimer == 0 and np.argmax(self.gestureDetectedTime) != 1:
+                self.gripperTimer = time.time()
+
+            if np.argmax(self.gestureDetectedTime) == 1 or t - self.gripperTimer > self.timerThreshold:
+                self.gripperTimer = 0
+                self.gesture = GRIP
+                self.timeSinceLastValidGesture = 0
+                self.gestureDetectedTime[1] = time.time()
+
+        # elif all(self.openFingers[:2] == 1) and all(self.openFingers[2:] == 0):
+        #     # Open thumb and index
+        #     self.gesture = STANDARD_POSE
+        #     self.timeSinceLastValidGesture = 0
+        #     self.gestureDetectedTime[5] = time.time()
+        elif all(self.openFingers == 0):
+            # All fingers closed, no tilting
+            self.gesture = MOVE
+            self.timeSinceLastValidGesture = 0
+            self.gestureDetectedTime[4] = time.time()
         else:
             # No valid gesture detected
             if self.timeSinceLastValidGesture < self.gamma:
                 t = time.time()
-                self.timeSinceLastValidGesture = (t - self.gestureDetectedTime)/ 1000
+                self.timeSinceLastValidGesture = (t - max(self.gestureDetectedTime))/ 1000
             else:
                 self.gesture = 0
 
