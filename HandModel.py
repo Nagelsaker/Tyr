@@ -264,12 +264,6 @@ class HandModel():
             # All fingers closed
             self.gesture = GRIP
         elif all(self.openFingers == 1):
-            # All fingers open
-            # if wristAngle < self.wristAngle_threshold[0]:
-            #     self.gesture = TILT_UP
-            # elif wristAngle > self.wristAngle_threshold[1]:
-            #     self.gesture = TILT_DOWN
-            # else:
             self.gesture = UNGRIP
         elif all(self.openFingers[:4] == 0) and self.openFingers[4] == 1:
             # Pinky finger open

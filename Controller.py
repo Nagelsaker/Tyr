@@ -24,6 +24,7 @@ class Controller():
         self.K_p_r = Kp[1]
         self.K_p_z = Kp[2]
         self.K_p_t = Kp[3]
+        self.K_p_o = Kp[4]
 
         self.goal = np.array([-99, -99, -99])
 
@@ -162,6 +163,29 @@ class Controller():
         jointPositions["joint4"] += gain
         self.requestJointPositions(jointPositions)
 
+    def incrementOrientation(self, direction):
+        gain = self.K_p_o
+        if direction == "up":
+            gain *= -1
+        elif direction == "down":
+            gain *= 1
+        
+        newPose = copy.deepcopy(self.pose)
+        orientation = newPose["orientation"]
+        quaternion = np.array([orientation["x"], orientation["y"], orientation["z"], orientation["w"]])
+
+        euler = euler_from_quaternion(quaternion)
+        euler[1] += gain # Adjust y angle
+
+        newQuaternion = quaternion_from_euler(euler)
+        orientation["x"] = newQuaternion[0] 
+        orientation["y"] = newQuaternion[1] 
+        orientation["z"] = newQuaternion[2] 
+        orientation["w"] = newQuaternion[3]
+
+        newPose["orientation"] = copy.deepcopy(orientation)
+        self.requestOrientation(newPose)
+
 
 
     def incrementGripper(self, direction):
@@ -198,6 +222,8 @@ class Controller():
             self.pose["position"]["y"] = newPose["position"]["y"]
         if updateZ:
             self.pose["position"]["z"] = newPose["position"]["z"]
+
+        self.pose["orientation"] = copy.deepcopy(newPose["orientation"])
 
         rclpy.spin_once(self.jointSubscriber) # Update positions
         self.jointPositions = self.jointSubscriber.getPositions()

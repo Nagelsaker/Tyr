@@ -6,13 +6,13 @@ from Controller import Controller, Obstacle
 from HandModel import *
 
 def fsm():
-    depthRange = [0.50, 0.85]
+    depthRange = [0.60, 0.85]
     pathTime = 0.6 # 0.2
     imgWidth = 1920
     imgHeight = 1080
 
     # Obstacles
-    floor = Obstacle(zRange=[-99, 0.037])
+    floor = Obstacle(zRange=[-99, 0.035])
     ceiling = Obstacle(zRange=[0.456, 99])
     innerCylinder = Obstacle(radiusRange=[0, 0.06])
     outerCylinder = Obstacle(radiusRange=[0.386, 99])
@@ -26,7 +26,7 @@ def fsm():
     hm = HandModel("left", workspaceSections)
     # Kp=[1, 0.20, 0.26, 0.30]
     # Kp=[K_p_a, K_p_r, K_p_z, K_p_t]
-    controller = Controller(imgWidth, imgHeight, Kp=[0.20, 0.05, 0.07, 0.15], pathTime=pathTime, obstacles=obstacles)
+    controller = Controller(imgWidth, imgHeight, Kp=[0.20, 0.05, 0.07, 0.15, np.deg2rad(10)], pathTime=pathTime, obstacles=obstacles)
     
     handTracker.startStream()
 
@@ -85,9 +85,11 @@ def fsm():
                 depth,_ = hm.getHandDepth()
                 controller.incrementHeight(depth=depth, range=depthRange)
             elif wsLoc == WS_MISC and currentGesture == TILT_UP:
-                controller.incrementTilt(direction="up")
+                # controller.incrementTilt(direction="up")
+                controller.incrementOrientation(direction="up")
             elif wsLoc == WS_MISC and currentGesture == TILT_DOWN:
-                controller.incrementTilt(direction="down")
+                # controller.incrementTilt(direction="down")
+                controller.incrementOrientation(direction="down")
 
     except KeyboardInterrupt:
         print("\nExiting..")
