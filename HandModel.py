@@ -19,14 +19,25 @@ import numpy as np
 
 
 # Constants
+# Hand gestures
 STOP = 0
 GRIP = 1
 UNGRIP = 2
-TURN = 3
-MOVE = 4
-STANDARD_POSE = 5
-TILT_DOWN = 6
-TILT_UP = 7
+PRECISION = 3
+TILT_UP = 4
+TILT_DOWN = 5
+MOVE_HEIGHT = 6
+
+# Workspace locations
+WS_TURN_LEFT = 0
+WS_TURN_RIGHT = 1
+WS_MOVE_FORWARD = 2
+WS_MOVE_BACKWARD = 3
+WS_LEFT_FORWARD = 4
+WS_LEFT_BACKWARD = 5
+WS_RIGHT_BACKWARD = 6
+WS_RIGHT_FORWARD = 7
+WS_MISC = 8
 
 
 class HandModel():
@@ -52,7 +63,10 @@ class HandModel():
         7:
             Tilt Up
     '''
-    def __init__(self, type):
+    def __init__(self, type, workspace):
+        self.type = type
+        self.workspace = workspace
+
         self.fingerAngles = {}
         self.slidingWindow = []
         self.depthWindow = []
@@ -67,7 +81,7 @@ class HandModel():
         self.gripperTimer = 0
         self.wristTimer = 0
         self.timerThreshold = 0.8
-        self.wristAngle_threshold = [-17, 17]
+        self.wristAngle_threshold = [-15, 15]
 
         self.index_threshold = np.deg2rad([25, 40])
 
@@ -240,77 +254,41 @@ class HandModel():
                 self.openFingers[idx] = 0
             else:
                 self.openFingers[idx] = 1
-
-        indexFinger = self.fingerAngles[1]
-        index_beta_2 = indexFinger[0][1]
-        index_beta_3 = indexFinger[1][1]
-
+        
         wristAngle = self.estimateWristAngle()
         print(f"Angle: {wristAngle:.2f} \r", end="")
 
-        if all(self.openFingers == 1):
+        depth, var = self.getHandDepth()
+
+        if all(self.openFingers == 0):
+            # All fingers closed
+            self.gesture = GRIP
+        elif all(self.openFingers == 1):
             # All fingers open
-            self.gesture = STOP
-            self.timeSinceLastValidGesture = 0
-            self.gestureDetectedTime[0] = time.time()
-        elif self.openFingers[0] == 1 and all(self.openFingers[1:] == 0):
-            # Thumb open
-            if wristAngle > self.wristAngle_threshold[1]:
-                # Tilt end-effector downwards
-                t = time.time()
-                if self.wristTimer == 0 and np.argmax(self.gestureDetectedTime) != 6:
-                    self.wristTimer = time.time()
-                if np.argmax(self.gestureDetectedTime) == 6 or t - self.wristTimer > self.timerThreshold:
-                    self.gesture = TILT_DOWN
-                    self.timeSinceLastValidGesture = 0
-                    self.gestureDetectedTime[6] = time.time()
-            elif wristAngle < self.wristAngle_threshold[0]:
-                # Tilt end-effector upwards
-                t = time.time()
-                if self.wristTimer == 0 and np.argmax(self.gestureDetectedTime) != 7:
-                    self.wristTimer = time.time()
-                if np.argmax(self.gestureDetectedTime) == 7 or t - self.wristTimer > self.timerThreshold:
-                    self.gesture = TILT_UP
-                    self.timeSinceLastValidGesture = 0
-                    self.gestureDetectedTime[7] = time.time()
-            else:
-                self.gesture = TURN
-                self.timeSinceLastValidGesture = 0
-                self.gestureDetectedTime[3] = time.time()
-        elif self.openFingers[0] == 0 and self.openFingers[1] == 1 and all(self.openFingers[2:] == 0):
-            # Index open
+            # if wristAngle < self.wristAngle_threshold[0]:
+            #     self.gesture = TILT_UP
+            # elif wristAngle > self.wristAngle_threshold[1]:
+            #     self.gesture = TILT_DOWN
+            # else:
             self.gesture = UNGRIP
-            self.timeSinceLastValidGesture = 0
-            self.gestureDetectedTime[2] = time.time()
-        elif np.abs(index_beta_2) < self.index_threshold[0] and np.abs(index_beta_3) > self.index_threshold[1] and all(self.openFingers == 0):
-            # Index halfway open
-            t = time.time()
-            if self.gripperTimer == 0 and np.argmax(self.gestureDetectedTime) != 1:
-                self.gripperTimer = time.time()
-
-            if np.argmax(self.gestureDetectedTime) == 1 or t - self.gripperTimer > self.timerThreshold:
-                self.gripperTimer = 0
-                self.gesture = GRIP
-                self.timeSinceLastValidGesture = 0
-                self.gestureDetectedTime[1] = time.time()
-
-        # elif all(self.openFingers[:2] == 1) and all(self.openFingers[2:] == 0):
-        #     # Open thumb and index
-        #     self.gesture = STANDARD_POSE
-        #     self.timeSinceLastValidGesture = 0
-        #     self.gestureDetectedTime[5] = time.time()
-        elif all(self.openFingers == 0):
-            # All fingers closed, no tilting
-            self.gesture = MOVE
-            self.timeSinceLastValidGesture = 0
-            self.gestureDetectedTime[4] = time.time()
-        else:
-            # No valid gesture detected
-            if self.timeSinceLastValidGesture < self.gamma:
-                t = time.time()
-                self.timeSinceLastValidGesture = (t - max(self.gestureDetectedTime))/ 1000
+        elif all(self.openFingers[:4] == 0) and self.openFingers[4] == 1:
+            # Pinky finger open
+            self.gesture = PRECISION
+        elif self.openFingers[0] == 0 and all(self.openFingers[1:] == 1):
+            # Thumb closed
+            pass
+            if wristAngle < self.wristAngle_threshold[0]:
+                self.gesture = TILT_UP
+            elif wristAngle > self.wristAngle_threshold[1]:
+                self.gesture = TILT_DOWN
             else:
-                self.gesture = 0
+                self.gesture = STOP
+        elif self.openFingers[0] == 0 and self.openFingers[1] == 1 and all(self.openFingers[2:] == 0):
+            # Index finger open
+            self.gesture = MOVE_HEIGHT
+        else:
+            self.gesture = STOP
+
 
     def getPalmLocation(self):
         '''
@@ -324,7 +302,7 @@ class HandModel():
             latestLandmarks = self.slidingWindow[-1]
         except Exception:
             print("Error getting palm location: No hand detected yet!")
-            return
+            return [1920/2, 1080/2, 0]
         x = np.array([latestLandmarks[0][0]['X'], latestLandmarks[0][1]['X'], latestLandmarks[0][5]['X'],
                     latestLandmarks[0][9]['X'], latestLandmarks[0][13]['X'], latestLandmarks[0][17]['X']]).mean()
         y = np.array([latestLandmarks[0][0]['Y'], latestLandmarks[0][1]['Y'], latestLandmarks[0][5]['Y'],
@@ -357,6 +335,52 @@ class HandModel():
         # print(f"Estimator :\t{estDepth:.3f}\t\t Mean: {mean:.3f}\t\tVar: \t{var:.3f} \r", end="")
         return estDepth, var
 
+
+    def getWorkspaceLocation(self, imgHeight, imgWidth):
+        '''
+        Returns the grid position of the palm
+        workspaceIndices:
+            keys: TurnLeft, TurnRight, MoveForward, MoveBackward, Misc, LeftForward, LeftBackward, RightBackward, RightForward
+            secondary keys: XRange, YRange
+        '''
+        palmPos = np.array([int(self.getPalmLocation()[0]*imgWidth), int(self.getPalmLocation()[1]*imgHeight)])
+
+        if (self.workspace["TurnLeft"]["XRange"][0] < palmPos[0] < self.workspace["TurnLeft"]["XRange"][1] and
+            self.workspace["TurnLeft"]["YRange"][0] < palmPos[1] < self.workspace["TurnLeft"]["YRange"][1]):
+            return WS_TURN_LEFT
+
+        if (self.workspace["TurnRight"]["XRange"][0] < palmPos[0] < self.workspace["TurnRight"]["XRange"][1] and
+            self.workspace["TurnRight"]["YRange"][0] < palmPos[1] < self.workspace["TurnRight"]["YRange"][1]):
+            return WS_TURN_RIGHT
+
+        if (self.workspace["MoveForward"]["XRange"][0] < palmPos[0] < self.workspace["MoveForward"]["XRange"][1] and
+            self.workspace["MoveForward"]["YRange"][0] < palmPos[1] < self.workspace["MoveForward"]["YRange"][1]):
+            return WS_MOVE_FORWARD
+
+        if (self.workspace["MoveBackward"]["XRange"][0] < palmPos[0] < self.workspace["MoveBackward"]["XRange"][1] and
+            self.workspace["MoveBackward"]["YRange"][0] < palmPos[1] < self.workspace["MoveBackward"]["YRange"][1]):
+            return WS_MOVE_BACKWARD
+
+        if (self.workspace["Misc"]["XRange"][0] < palmPos[0] < self.workspace["Misc"]["XRange"][1] and
+            self.workspace["Misc"]["YRange"][0] < palmPos[1] < self.workspace["Misc"]["YRange"][1]):
+            return WS_MISC
+
+        if (self.workspace["LeftForward"]["XRange"][0] < palmPos[0] < self.workspace["LeftForward"]["XRange"][1] and
+            self.workspace["LeftForward"]["YRange"][0] < palmPos[1] < self.workspace["LeftForward"]["YRange"][1]):
+            return WS_LEFT_FORWARD
+
+        if (self.workspace["LeftBackward"]["XRange"][0] < palmPos[0] < self.workspace["LeftBackward"]["XRange"][1] and
+            self.workspace["LeftBackward"]["YRange"][0] < palmPos[1] < self.workspace["LeftBackward"]["YRange"][1]):
+            return WS_LEFT_BACKWARD
+
+        if (self.workspace["RightBackward"]["XRange"][0] < palmPos[0] < self.workspace["RightBackward"]["XRange"][1] and
+            self.workspace["RightBackward"]["YRange"][0] < palmPos[1] < self.workspace["RightBackward"]["YRange"][1]):
+            return WS_RIGHT_BACKWARD
+
+        if (self.workspace["RightForward"]["XRange"][0] < palmPos[0] < self.workspace["RightForward"]["XRange"][1] and
+            self.workspace["RightForward"]["YRange"][0] < palmPos[1] < self.workspace["RightForward"]["YRange"][1]):
+            return WS_RIGHT_FORWARD
+        
 
     def getFingerAngles(self):
         '''

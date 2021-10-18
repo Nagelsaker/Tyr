@@ -1,11 +1,12 @@
 import numpy as np
 from HandTracking import HandTracking
 from OperatorPanel import visualize
+from utils import generateWorkspace
 from Controller import Controller, Obstacle
 from HandModel import *
 
 def fsm():
-    depthRange = [0.35, 0.85]
+    depthRange = [0.50, 0.85]
     pathTime = 0.6 # 0.2
     imgWidth = 1920
     imgHeight = 1080
@@ -18,110 +19,81 @@ def fsm():
     motor = Obstacle(xRange=[0.175, 99], yRange=[-0.12, 0.05], zRange=[-99, 0.095])
     obstacles = np.array([floor, ceiling, innerCylinder, outerCylinder, motor])
 
-    handTracker = HandTracking()
-    hm = HandModel(type="left")
-    controller = Controller(imgWidth, imgHeight, depthRange, pathTime=pathTime, obstacles=obstacles)
+    # Operator workspace
+    workspaceOverlay, workspaceSections = generateWorkspace(imgHeight, imgWidth, layerSize=[0.4, 0.3])
 
-    standardPose = controller.getPose()
-    standardPose["position"]["x"] = 0.148
-    standardPose["position"]["y"] = 0.0
-    standardPose["position"]["z"] = 0.243
+    handTracker = HandTracking()
+    hm = HandModel("left", workspaceSections)
+    # Kp=[1, 0.20, 0.26, 0.30]
+    # Kp=[K_p_a, K_p_r, K_p_z, K_p_t]
+    controller = Controller(imgWidth, imgHeight, Kp=[0.20, 0.05, 0.07, 0.15], pathTime=pathTime, obstacles=obstacles)
     
     handTracker.startStream()
 
     try:
         while True: # Tracking loop
             handPoints, image, results = handTracker.getLiveLandamarks()
-            visualize(results, image) # Temp TODO Switch with an OperatorPanel object
+            visualize(results, image, workspaceOverlay) # Temp TODO Switch with an OperatorPanel object
             hm.addMeasurement(handPoints)
 
             controller.updateRobotPose()
-
             currentGesture = hm.getCurrentGesture()
-            palm = hm.getPalmLocation()
-            depth, var = hm.getHandDepth()
-            if depth == 0 and var == 0:
-                continue
-            
-            pos = controller.getPose()["position"]
-            # print(f"Current gesture:\t{currentGesture}\tPosition:\t{pos}\r", end="")
+            wsLoc = hm.getWorkspaceLocation(imgHeight, imgWidth)
 
-            if currentGesture == STOP: # Stop moving
-                # TODO?
+            # FSM
+            usePrecision = (currentGesture==PRECISION)
+
+            if wsLoc == WS_TURN_LEFT:
+                controller.updateRobotPose(updateX=True, updateY=True)
+                controller.turnHorizontally(direction="left", precision=usePrecision)
                 pass
-            elif currentGesture == GRIP: # Grip
-                controller.requestGripperDistance(-0.010)
-            elif currentGesture == UNGRIP: # Release grip
-                controller.requestGripperDistance(0.010)
+            elif wsLoc == WS_TURN_RIGHT:
+                controller.updateRobotPose(updateX=True, updateY=True)
+                controller.turnHorizontally(direction="right", precision=usePrecision)
                 pass
-            elif currentGesture == TURN: # Turn in the xy plane
-                controller.incrementXY(palm)
+            elif wsLoc == WS_MOVE_FORWARD:
+                controller.updateRobotPose(updateX=True, updateY=True)
+                controller.incrementRadius(direction="forward", precision=usePrecision)
                 pass
-            elif currentGesture == MOVE: # Move in rz plane
-                controller.incrementRadiusAndZ(palm, depth)
+            elif wsLoc == WS_MOVE_BACKWARD:
+                controller.updateRobotPose(updateX=True, updateY=True)
+                controller.incrementRadius(direction="backward", precision=usePrecision)
                 pass
-            elif currentGesture == STANDARD_POSE: # Move to standard pose
-                # controller.requestPose(standardPose, time=0.8)
-                # controller.requestGripperDistance(-0.010)
+            elif wsLoc == WS_LEFT_FORWARD:
+                controller.updateRobotPose(updateX=True, updateY=True)
+                controller.turnHorizontally(direction="left", precision=usePrecision)
+                controller.incrementRadius(direction="forward", precision=usePrecision)
                 pass
-            elif currentGesture == TILT_DOWN: # Tilt down
-                controller.incrementTilt("Down")
-            elif currentGesture == TILT_UP: # Tilt up
-                controller.incrementTilt("Up")
+            elif wsLoc == WS_LEFT_BACKWARD:
+                controller.updateRobotPose(updateX=True, updateY=True)
+                controller.turnHorizontally(direction="right", precision=usePrecision)
+                controller.incrementRadius(direction="backward", precision=usePrecision)
+                pass
+            elif wsLoc == WS_RIGHT_FORWARD:
+                controller.updateRobotPose(updateX=True, updateY=True)
+                controller.turnHorizontally(direction="right", precision=usePrecision)
+                controller.incrementRadius(direction="forward", precision=usePrecision)
+                pass
+            elif wsLoc == WS_MISC and currentGesture == GRIP:
+                controller.incrementGripper(direction="close")
+                pass
+            elif wsLoc == WS_MISC and currentGesture == UNGRIP:
+                controller.incrementGripper(direction="open")
+                pass
+            elif wsLoc == WS_MISC and currentGesture == MOVE_HEIGHT:
+                controller.updateRobotPose(updateZ=True)
+                depth,_ = hm.getHandDepth()
+                controller.incrementHeight(depth=depth, range=depthRange)
+            elif wsLoc == WS_MISC and currentGesture == TILT_UP:
+                controller.incrementTilt(direction="up")
+            elif wsLoc == WS_MISC and currentGesture == TILT_DOWN:
+                controller.incrementTilt(direction="down")
 
     except KeyboardInterrupt:
         print("\nExiting..")
         handTracker.endStream() # Remember to end the stream
         controller.endController()
 
-#     STATES:
-#         q = 0:
-#             (No Movement)
-#             * Tell the controller to stop moving the manipulator
-#             * Jumps to this state immediately when the stop gesture is detected,
-#                 or jumps after x seconds of invalid gesture. Remains in previous
-#                 state in those x seconds. May not be necessary.
-#                 TODO: Figure this out
-        
-#         q = 1:
-#             (Standard Pose)
-#             * Controllerm moves manipulator into pre-determined standard pose
-        
-#         q = 2:
-#             (Grip)
-#             * Controller asks manipulator to start gripping
-#             * Ends when a large enough force is detected, or
-#                 when operator stops action
-        
-#         q = 3:
-#             (Ungrip)
-#             * Controller asks manipulator to open up its gripper
-#             * Ends when gripper is fully opened or, operator
-#                 stops action
-        
-#         q = 4:
-#             (Move in the XZ plane)
-#             * Controller moves the manipulator in the XZ plane, according to
-#                 the position of the operators hand in front of the camera
-#             * Will not allow operator to move end-effector in forbidden areas
-#             * Stops when correct hand gesture is no longer detected.
-        
-#         q = 5:
-#             (Turn in the XY plane)
-#             * Keeps the radius of the circle constant, but lets the operator
-#                 turn the manipulator to the right/left according to the position
-#                 of the operators hand in front of the camera.
-#             * TODO: Test moving up and down as well. Movement constrained to a
-#                 cylinder instead of a circle
-#             * Will not allow operator to move end-effector in forbidden areas
-
-
-
-
-    
-#     Update Operator panel:
-#     * Detected hand gesture
-#     * 
 
 if __name__ == "__main__":
     fsm()

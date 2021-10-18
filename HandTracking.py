@@ -34,7 +34,7 @@ class HandTracking:
         '''
         self.camStream.end()
 
-    def getLiveLandamarks(self, visualize=True):
+    def getLiveLandamarks(self, visualize=False):
         '''
         Extracts one image from camera stream and runs hand detection on it.
         
@@ -62,6 +62,8 @@ class HandTracking:
 
             # Convert the BGR image to RGB.
             image = cv2.cvtColor(colorImage.astype("uint8"), cv2.COLOR_BGR2RGB)
+            image = cv2.flip(image, -1)
+            depthImage = cv2.flip(depthImage, -1)
             # To improve performance, optionally mark the image as not writeable to
             # pass by reference.
             image.flags.writeable = False

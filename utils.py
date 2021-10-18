@@ -107,3 +107,128 @@ def zRotToMat(ang):
     R[1,1] = np.cos(ang)
 
     return R
+
+
+
+def generateWorkspace(imageHeight, imageWidth, layerSize):
+    height, width = imageHeight, imageWidth
+    layerSizeH, layerSizeW = layerSize
+    turnColor = 0 # Red
+    moveColor = 2 # Blue
+    miscColor = 1 # Green
+    intensity = 125
+    checkerSize = 1 # Can only be 1 TODO: Fix
+
+    workspaceSections = {} # Key: [[yMin, yMax], [xMin, xMax]]
+
+    workspace = np.zeros((height, width, 3))
+
+    # Turn left
+    layerIndices = np.zeros((height, width), dtype=bool)
+    layerIndices[int(height*(1-layerSizeH)/2):int(height*(1+layerSizeH)/2), 0:int(width*(1-layerSizeW)/2)] = True
+    workspace[layerIndices, turnColor] = intensity
+    workspaceSections["TurnLeft"] = {}
+    workspaceSections["TurnLeft"]["YRange"] = [int(height*(1-layerSizeH)/2), int(height*(1+layerSizeH)/2)]
+    workspaceSections["TurnLeft"]["XRange"] = [0,                            int(width*(1-layerSizeW)/2)]
+
+    # Turn right
+    layerIndices = np.zeros((height, width), dtype=bool)
+    layerIndices[int(height*(1-layerSizeH)/2):int(height*(1+layerSizeH)/2), int(width*(1+layerSizeW)/2):] = True
+    workspace[layerIndices, turnColor] = intensity
+    workspaceSections["TurnRight"] = {}
+    workspaceSections["TurnRight"]["YRange"] = [int(height*(1-layerSizeH)/2), int(height*(1+layerSizeH)/2)]
+    workspaceSections["TurnRight"]["XRange"] = [int(width*(1+layerSizeW)/2),  width]
+
+    # Move Forward
+    layerIndices = np.zeros((height, width), dtype=bool)
+    layerIndices[0:int(height*(1-layerSizeH)/2), int(width*(1-layerSizeW)/2):int(width*(1+layerSizeW)/2)] = True
+    workspace[layerIndices, moveColor] = intensity
+    workspaceSections["MoveForward"] = {}
+    workspaceSections["MoveForward"]["YRange"] = [0,                           int(height*(1-layerSizeH)/2)]
+    workspaceSections["MoveForward"]["XRange"] = [int(width*(1-layerSizeW)/2), int(width*(1+layerSizeW)/2)]
+
+    # Move Backward
+    layerIndices = np.zeros((height, width), dtype=bool)
+    layerIndices[int(height*(1+layerSizeH)/2):, int(width*(1-layerSizeW)/2):int(width*(1+layerSizeW)/2)] = True
+    workspace[layerIndices, moveColor] = intensity
+    workspaceSections["MoveBackward"] = {}
+    workspaceSections["MoveBackward"]["YRange"] = [int(height*(1+layerSizeH)/2), height]
+    workspaceSections["MoveBackward"]["XRange"] = [int(width*(1-layerSizeW)/2),  int(width*(1+layerSizeW)/2)]
+
+    # Misc Section
+    layerIndices = np.zeros((height, width), dtype=bool)
+    layerIndices[int(height*(1-layerSizeH)/2):int(height*(1+layerSizeH)/2), int(width*(1-layerSizeW)/2):int(width*(1+layerSizeW)/2)] = True
+    workspace[layerIndices, miscColor] = intensity
+    workspaceSections["Misc"] = {}
+    workspaceSections["Misc"]["YRange"] = [int(height*(1-layerSizeH)/2), int(height*(1+layerSizeH)/2)]
+    workspaceSections["Misc"]["XRange"] = [int(width*(1-layerSizeW)/2),  int(width*(1+layerSizeW)/2)]
+
+    # Turn Left & Move Forward
+    layerIndices = np.zeros((height, width), dtype=bool)
+    checkerIndices = np.zeros((int(height*(1-layerSizeH)/2), int(width*(1-layerSizeW)/2)), dtype=bool)
+    checkerIndices[::(2*checkerSize), ::(2*checkerSize)] = np.ones((checkerSize), dtype=bool)
+    checkerIndices[checkerSize::(2*checkerSize), checkerSize::(2*checkerSize)] = True
+
+    blueIndices = np.copy(layerIndices)
+    redIndices = np.copy(layerIndices)
+    blueIndices[0:int(height*(1-layerSizeH)/2), 0:int(width*(1-layerSizeW)/2)] = checkerIndices
+    redIndices[0:int(height*(1-layerSizeH)/2), 0:int(width*(1-layerSizeW)/2)] = np.invert(checkerIndices)
+
+    workspace[blueIndices, moveColor] = intensity
+    workspace[redIndices, turnColor] = intensity
+    workspaceSections["LeftForward"] = {}
+    workspaceSections["LeftForward"]["YRange"] = [0, int(height*(1-layerSizeH)/2)]
+    workspaceSections["LeftForward"]["XRange"] = [0, int(width*(1-layerSizeW)/2)]
+
+    # Turn Left & Move Backward
+    layerIndices = np.zeros((height, width), dtype=bool)
+    checkerIndices = np.zeros((int(height*(1-layerSizeH)/2), int(width*(1-layerSizeW)/2)), dtype=bool)
+    checkerIndices[::(2*checkerSize), ::(2*checkerSize)] = True
+    checkerIndices[checkerSize::(2*checkerSize), checkerSize::(2*checkerSize)] = True
+
+    blueIndices = np.copy(layerIndices)
+    redIndices = np.copy(layerIndices)
+    blueIndices[int(height*(1+layerSizeH)/2):, 0:int(width*(1-layerSizeW)/2)] = checkerIndices
+    redIndices[int(height*(1+layerSizeH)/2):, 0:int(width*(1-layerSizeW)/2)] = np.invert(checkerIndices)
+
+    workspace[blueIndices, moveColor] = intensity
+    workspace[redIndices, turnColor] = intensity
+    workspaceSections["LeftBackward"] = {}
+    workspaceSections["LeftBackward"]["YRange"] = [int(height*(1+layerSizeH)/2), height]
+    workspaceSections["LeftBackward"]["XRange"] = [0, int(width*(1-layerSizeW)/2)]
+
+    # Turn Right & Move Backward
+    layerIndices = np.zeros((height, width), dtype=bool)
+    checkerIndices = np.zeros((int(height*(1-layerSizeH)/2), int(width*(1-layerSizeW)/2)), dtype=bool)
+    checkerIndices[::(2*checkerSize), ::(2*checkerSize)] = True
+    checkerIndices[checkerSize::(2*checkerSize), checkerSize::(2*checkerSize)] = True
+
+    blueIndices = np.copy(layerIndices)
+    redIndices = np.copy(layerIndices)
+    blueIndices[int(height*(1+layerSizeH)/2):, int(width*(1+layerSizeW)/2):] = checkerIndices
+    redIndices[int(height*(1+layerSizeH)/2):, int(width*(1+layerSizeW)/2):] = np.invert(checkerIndices)
+
+    workspace[blueIndices, moveColor] = intensity
+    workspace[redIndices, turnColor] = intensity
+    workspaceSections["RightBackward"] = {}
+    workspaceSections["RightBackward"]["YRange"] = [int(height*(1+layerSizeH)/2), height]
+    workspaceSections["RightBackward"]["XRange"] = [int(width*(1+layerSizeW)/2), width]
+
+    # Turn Right & Move Forward
+    layerIndices = np.zeros((height, width), dtype=bool)
+    checkerIndices = np.zeros((int(height*(1-layerSizeH)/2), int(width*(1-layerSizeW)/2)), dtype=bool)
+    checkerIndices[::(2*checkerSize), ::(2*checkerSize)] = True
+    checkerIndices[checkerSize::(2*checkerSize), checkerSize::(2*checkerSize)] = True
+
+    blueIndices = np.copy(layerIndices)
+    redIndices = np.copy(layerIndices)
+    blueIndices[0:int(height*(1-layerSizeH)/2), int(width*(1+layerSizeW)/2):] = checkerIndices
+    redIndices[0:int(height*(1-layerSizeH)/2), int(width*(1+layerSizeW)/2):] = np.invert(checkerIndices)
+
+    workspace[blueIndices, moveColor] = intensity
+    workspace[redIndices, turnColor] = intensity
+    workspaceSections["RightForward"] = {}
+    workspaceSections["RightForward"]["YRange"] = [0, int(height*(1-layerSizeH)/2)]
+    workspaceSections["RightForward"]["XRange"] = [int(width*(1+layerSizeW)/2), width]
+                                         
+    return workspace, workspaceSections

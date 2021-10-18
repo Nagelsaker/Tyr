@@ -13,18 +13,17 @@ from utils import euler_from_quaternion, quaternion_from_euler
 from Communication import SetPositionClient, SetGripperDistanceClient, PoseSubscriber, SetOrientationClient, JointPositionSubscriber, SetJointPositionClient
 
 class Controller():
-    def __init__(self, imgWidth, imgHeight, depthRange, pathTime, obstacles=None):
+    def __init__(self, imgWidth, imgHeight, Kp, pathTime, obstacles=None):
         rclpy.init()
         self.obstacles = obstacles
         self.pathTime = pathTime
         self.imgWidth = imgWidth
         self.imgHeight = imgHeight
-        self.depthRange = depthRange
 
-        self.K_p_a = 1 #0.5
-        self.K_p_r = 0.20 #0.14 # 0.07
-        self.K_p_z = 0.26 #0.13
-        self.K_p_t = 0.30
+        self.K_p_a = Kp[0]
+        self.K_p_r = Kp[1]
+        self.K_p_z = Kp[2]
+        self.K_p_t = Kp[3]
 
         self.goal = np.array([-99, -99, -99])
 
@@ -58,50 +57,66 @@ class Controller():
     def setGoal(self, point):
         pass
 
-    def incrementRadiusAndZ(self, palmPos, depth):
+    def incrementRadius(self, direction, precision):
         x = self.pose["position"]["x"]
         y = self.pose["position"]["y"]
         z = self.pose["position"]["z"]
         r = np.sqrt(x**2 + y**2)
-        rho = np.sqrt(x**2 + y**2 + z**2)
         alpha = np.arctan2(y, x)
 
-        # In/Out movement
-        r_delta = (palmPos[1] - 1/2)*self.K_p_r
+        if precision == True:
+            r_delta = self.K_p_r / 5
+        else:
+            r_delta = self.K_p_r
+
+        if direction == "forward":
+            r_delta *= 1
+        elif direction == "backward":
+            r_delta *= -1
+
         r_new = r + r_delta
-        
-        # print(f"D: {depth}")
-        if not (self.depthRange[0] < depth < self.depthRange[1]):
-            if depth < self.depthRange[0]:
-                depth = self.depthRange[0]
-            else:
-                depth = self.depthRange[1]
-
-        z_delta = (-1)*(depth - self.depthRange[0] - (self.depthRange[1]-self.depthRange[0])/2) / (self.depthRange[1] - self.depthRange[0]) * self.K_p_z
-        z_new = z + z_delta
-
-        # print(f"Moving in directions: r={r_delta/np.abs(r_delta)}\t\tz={z_delta/np.abs(z_delta)} \r", end="")
-
-        beta_new = np.arctan2(z_new, r_new)
         x_new = r_new * np.cos(alpha)
         y_new = r_new * np.sin(alpha)
-        z_new = rho * np.sin(beta_new)
 
         newPose = copy.deepcopy(self.pose)
         newPose["position"]["x"] = np.around(x_new, 4)
         newPose["position"]["y"] = np.around(y_new, 4)
-        newPose["position"]["z"] = np.around(z_new, 4)
+        newPose["position"]["z"] = np.around(z, 4)
 
-        point = np.array([x_new, y_new, z_new])
+        point = np.array([x_new, y_new, z])
 
         if self.isPointInWorkspace(point):
             self.requestPose(newPose)
         else:
             print("Obstacle Alert!")
 
-    def incrementXY(self, palmPos):
-        # Moves downwards in z direction as well. TODO: Possibly recalibrate
-        # Turns only to the left
+    def incrementHeight(self, depth, range):
+        x = self.pose["position"]["x"]
+        y = self.pose["position"]["y"]
+        z = self.pose["position"]["z"]
+        
+        if not (range[0] < depth < range[1]):
+            if depth < range[0]:
+                depth = range[0]
+            else:
+                depth = range[1]
+
+        z_delta = (-1)*(depth - range[0] - (range[1]-range[0])/2) / (range[1] - range[0]) * self.K_p_z
+        z_new = z + z_delta
+
+        newPose = copy.deepcopy(self.pose)
+        newPose["position"]["x"] = np.around(x, 4)
+        newPose["position"]["y"] = np.around(y, 4)
+        newPose["position"]["z"] = np.around(z_new, 4)
+
+        point = np.array([x, y, z_new])
+
+        if self.isPointInWorkspace(point):
+            self.requestPose(newPose)
+        else:
+            print("Obstacle Alert!")
+
+    def turnHorizontally(self, direction, precision):
 
         x = self.pose["position"]["x"]
         y = self.pose["position"]["y"]
@@ -110,7 +125,15 @@ class Controller():
         r = np.sqrt(x**2 + y**2)
         alpha = np.arctan2(y, x)
 
-        alpha_delta = (palmPos[0] - 1/2) * self.K_p_a
+        if precision == True:
+            alpha_delta = self.K_p_a / 5
+        else:
+            alpha_delta = self.K_p_a
+        
+        if direction == "left":
+            alpha_delta *= 1
+        elif direction == "right":
+            alpha_delta *= -1
 
         alpha_new = alpha + alpha_delta
         x_new = r * np.cos(alpha_new)
@@ -128,9 +151,12 @@ class Controller():
         else:
             print("Obstacle Alert!")
 
-    def incrementTilt(self, dir):
+    def incrementTilt(self, direction):
         gain = self.K_p_t
-        if dir == "Up": gain*= -1
+        if direction == "up":
+            gain *= -1
+        elif direction == "down":
+            gain *= 1
 
         jointPositions = self.getJointPositions()
         jointPositions["joint4"] += gain
@@ -138,8 +164,11 @@ class Controller():
 
 
 
-    def incrementGripper(self, palmPos):
-        pass
+    def incrementGripper(self, direction):
+        if direction == "close":
+            self.requestGripperDistance(-0.010)
+        elif direction == "open":
+            self.requestGripperDistance(0.010)
 
     def isPointInWorkspace(self, point):
         if self.obstacles is None:
@@ -160,9 +189,16 @@ class Controller():
     def getJointPositions(self):
         return copy.deepcopy(self.jointPositions)
 
-    def updateRobotPose(self):
+    def updateRobotPose(self, updateX=False, updateY=False, updateZ=False):
         rclpy.spin_once(self.poseSubscriber) # Update pose
-        self.pose = self.poseSubscriber.getPose()
+        newPose = self.poseSubscriber.getPose()
+        if updateX:
+            self.pose["position"]["x"] = newPose["position"]["x"]
+        if updateY:
+            self.pose["position"]["y"] = newPose["position"]["y"]
+        if updateZ:
+            self.pose["position"]["z"] = newPose["position"]["z"]
+
         rclpy.spin_once(self.jointSubscriber) # Update positions
         self.jointPositions = self.jointSubscriber.getPositions()
     
