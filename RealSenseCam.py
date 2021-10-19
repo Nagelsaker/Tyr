@@ -4,13 +4,14 @@ import cv2
 
 
 class CameraStream:
-    def __init__(self):
+    def __init__(self, serialNr):
         self.pipeline = rs.pipeline()
 
         # Configure streams
         self.config = rs.config()
         self.config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30)
         self.config.enable_stream(rs.stream.color, 1920, 1080, rs.format.bgr8, 30)
+        self.config.enable_device(serialNr)
 
     def start(self):
         self.profile = self.pipeline.start(self.config)

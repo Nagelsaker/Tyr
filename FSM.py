@@ -10,6 +10,7 @@ def fsm():
     pathTime = 0.6 # 0.2
     imgWidth = 1920
     imgHeight = 1080
+    camSN = "836612072676"
 
     # Obstacles
     floor = Obstacle(zRange=[-99, 0.035])
@@ -22,7 +23,7 @@ def fsm():
     # Operator workspace
     workspaceOverlay, workspaceSections = generateWorkspace(imgHeight, imgWidth, layerSize=[0.4, 0.3])
 
-    handTracker = HandTracking()
+    handTracker = HandTracking(camSN)
     hm = HandModel("left", workspaceSections)
     # Kp=[1, 0.20, 0.26, 0.30]
     # Kp=[K_p_a, K_p_r, K_p_z, K_p_t]

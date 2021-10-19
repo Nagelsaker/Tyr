@@ -12,11 +12,12 @@ from Communication import SetPositionClient, PoseSubscriber
 
 
 class HandTracking:
-    def __init__(self):
+    def __init__(self, camSN):
         '''
         Module that tracks hands with the MediaPipe API. Also includes depth information
         of detections, produced by the Intel RealSense Depth Camera D435.
         '''
+        self.camSN = camSN
         self.mpDrawing = mp.solutions.drawing_utils
         self.mpDrawingStyles = mp.solutions.drawing_styles
         self.mpHands = mp.solutions.hands
@@ -25,7 +26,7 @@ class HandTracking:
         '''
         Starts streaming from the stereoscopic sensor
         '''
-        self.camStream = CameraStream()
+        self.camStream = CameraStream(self.camSN)
         self.camStream.start()
     
     def endStream(self):
