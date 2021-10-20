@@ -1,4 +1,3 @@
-from SimpleController import SimpleController
 import cv2
 import glob
 import rclpy
@@ -6,8 +5,9 @@ import numpy as np
 import mediapipe as mp
 from pathlib import Path
 from HandModel import HandModel
-from RealSenseCam import CameraStream
-from Communication import SetPositionClient, PoseSubscriber
+from Comms.SimpleController import SimpleController
+from Comms.RealSenseCam import CameraStream
+from Comms.Communication import SetPositionClient, PoseSubscriber
 
 
 

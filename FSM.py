@@ -1,9 +1,9 @@
 import numpy as np
-from HandTracking import HandTracking
-from OperatorPanel import visualize
-from utils import generateWorkspace
-from Controller import Controller, Obstacle
-from HandModel import *
+from Hand.HandTracking import HandTracking
+from Utility.OperatorPanel_old import visualize
+from Utility.utils import generateWorkspace
+from Comms.Controller import Controller, Obstacle
+from Hand.HandModel import *
 
 def fsm():
     depthRange = [0.60, 0.85]
