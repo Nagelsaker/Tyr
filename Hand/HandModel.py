@@ -12,7 +12,7 @@
 
 '''
 
-import Utility.utils
+import Utility.utils as utils
 import datetime
 import time
 import numpy as np

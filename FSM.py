@@ -1,11 +1,12 @@
 import numpy as np
 from Hand.HandTracking import HandTracking
-from Utility.OperatorPanel_old import visualize
+from Utility.utils import drawLandmarks
 from Utility.utils import generateWorkspace
 from Comms.Controller import Controller, Obstacle
+from PyQt5.QtGui import QImage
 from Hand.HandModel import *
 
-def fsm():
+def fsm(thread=None):
     depthRange = [0.60, 0.85]
     pathTime = 0.6 # 0.2
     imgWidth = 1920
@@ -33,8 +34,18 @@ def fsm():
 
     try:
         while True: # Tracking loop
+            if thread is not None:
+                if thread.isInterruptionRequested():
+                    raise Exception
+
             handPoints, image, results = handTracker.getLiveLandamarks()
-            visualize(results, image, workspaceOverlay) # Temp TODO Switch with an OperatorPanel object
+            if thread is not None:
+                imgLM =  drawLandmarks(results, image, workspaceOverlay) # Temp TODO Switch with an OperatorPanel object
+                h, w, ch = imgLM.shape
+                bytesPerLine = ch * w
+                convertToQtFormat = QImage(imgLM.data, w, h, bytesPerLine, QImage.Format_RGB888).scaled(thread.w, thread.h)
+                thread.changePixmap.emit(convertToQtFormat)
+            # visualize(results, image, workspaceOverlay) # Temp TODO Switch with an OperatorPanel object
             hm.addMeasurement(handPoints)
 
             controller.updateRobotPose()
@@ -92,10 +103,12 @@ def fsm():
                 # controller.incrementTilt(direction="down")
                 controller.incrementOrientation(direction="down")
 
-    except KeyboardInterrupt:
+    except Exception:
         print("\nExiting..")
         handTracker.endStream() # Remember to end the stream
         controller.endController()
+        if thread is not None:
+            thread.quit()
 
 
 if __name__ == "__main__":

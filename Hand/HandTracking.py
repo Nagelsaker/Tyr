@@ -4,7 +4,7 @@ import rclpy
 import numpy as np
 import mediapipe as mp
 from pathlib import Path
-from HandModel import HandModel
+from Hand.HandModel import HandModel
 from Comms.SimpleController import SimpleController
 from Comms.RealSenseCam import CameraStream
 from Comms.Communication import SetPositionClient, PoseSubscriber
@@ -21,6 +21,10 @@ class HandTracking:
         self.mpDrawing = mp.solutions.drawing_utils
         self.mpDrawingStyles = mp.solutions.drawing_styles
         self.mpHands = mp.solutions.hands
+
+        self.handPoints = None
+        self.image = None
+        self.results = None
 
     def startStream(self):
         '''
@@ -98,20 +102,17 @@ class HandTracking:
                     handPoints[handIdx] = keypoints
                     handIdx += 1
 
-                # Remove this
-                # estHandPosition = np.array([
-                #     (handPoints[0][0]["X"] + (handPoints[0][5]["X"] - handPoints[0][0]["X"])/2 ) * imgWidth,
-                #     (handPoints[0][0]["Y"] + (handPoints[0][5]["Y"] - handPoints[0][0]["Y"])/2 ) * imgHeight
-                #     ])
-                # handDepth = depthImage[int(estHandPosition[1]), int(estHandPosition[0]), 0]
-                # print(f"Wrist depth: {handDepth} \tPixels: {estHandPosition}")
-
             if visualize:
                 self.drawLandmarks(results, image)
+            
+            self.handPoints = handPoints
+            self.image = image
+            self.results = results
 
-            # return handDepth, estHandPosition, handPoints, image
-            return handPoints, image, results # USE this
+            return handPoints, image, results
 
+    def getCurrentLandmarks(self):
+        return self.handPoints, self.image, self.results
 
     def drawLandmarks(self, results, image):
         '''

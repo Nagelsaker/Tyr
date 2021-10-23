@@ -10,7 +10,7 @@ import copy
 import rclpy
 import numpy as np
 from Utility.utils import euler_from_quaternion, quaternion_from_euler
-from Communication import SetPositionClient, SetGripperDistanceClient, PoseSubscriber, SetOrientationClient, JointPositionSubscriber, SetJointPositionClient
+from Comms.Communication import *
 
 class Controller():
     def __init__(self, imgWidth, imgHeight, Kp, pathTime, obstacles=None):
