@@ -1,7 +1,6 @@
 import numpy as np
 from Hand.HandTracking import HandTracking
-from Utility.utils import drawLandmarks
-from Utility.utils import generateWorkspace
+from Utility.utils import generateWorkspace, drawLandmarks, loadWorkspace, visualize
 from Comms.Controller import Controller, Obstacle
 from PyQt5.QtGui import QImage
 from Hand.HandModel import *
@@ -18,18 +17,19 @@ def fsm(thread=None):
     ceiling = Obstacle(zRange=[0.456, 99])
     innerCylinder = Obstacle(radiusRange=[0, 0.06])
     outerCylinder = Obstacle(radiusRange=[0.386, 99])
-    motor = Obstacle(xRange=[0.175, 99], yRange=[-0.12, 0.05], zRange=[-99, 0.095])
+    motor = Obstacle(xRange=[0.185, 99], yRange=[-0.12, 0.05], zRange=[-99, 0.095])
     obstacles = np.array([floor, ceiling, innerCylinder, outerCylinder, motor])
 
     # Operator workspace
-    workspaceOverlay, workspaceSections = generateWorkspace(imgHeight, imgWidth, layerSize=[0.4, 0.3])
+    # workspaceOverlay, workspaceSections = generateWorkspace(imgHeight, imgWidth, 500, 950, 250)
+    workspaceOverlay, workspaceSections = loadWorkspace()
 
     handTracker = HandTracking(camSN)
     hm = HandModel("left", workspaceSections)
     # Kp=[1, 0.20, 0.26, 0.30]
     # Kp=[K_p_a, K_p_r, K_p_z, K_p_t]
     controller = Controller(imgWidth, imgHeight, Kp=[0.20, 0.05, 0.07, 0.15, np.deg2rad(10)], pathTime=pathTime, obstacles=obstacles)
-    
+    controller.updateRobotPose(updateX=True, updateY=True, updateZ=True)
     handTracker.startStream()
 
     try:
@@ -40,7 +40,7 @@ def fsm(thread=None):
 
             handPoints, image, results = handTracker.getLiveLandamarks()
             if thread is not None:
-                imgLM =  drawLandmarks(results, image, workspaceOverlay) # Temp TODO Switch with an OperatorPanel object
+                imgLM =  drawLandmarks(results, image, workspaceOverlay, thread)
                 h, w, ch = imgLM.shape
                 bytesPerLine = ch * w
                 convertToQtFormat = QImage(imgLM.data, w, h, bytesPerLine, QImage.Format_RGB888).scaled(thread.w, thread.h)
@@ -58,44 +58,28 @@ def fsm(thread=None):
             if wsLoc == WS_TURN_LEFT:
                 controller.updateRobotPose(updateX=True, updateY=True)
                 controller.turnHorizontally(direction="left", precision=usePrecision)
-                pass
+                # controller.updateRobotPose(updateX=True, updateY=True)
             elif wsLoc == WS_TURN_RIGHT:
                 controller.updateRobotPose(updateX=True, updateY=True)
                 controller.turnHorizontally(direction="right", precision=usePrecision)
-                pass
+                # controller.updateRobotPose(updateX=True, updateY=True)
             elif wsLoc == WS_MOVE_FORWARD:
                 controller.updateRobotPose(updateX=True, updateY=True)
                 controller.incrementRadius(direction="forward", precision=usePrecision)
-                pass
+                # controller.updateRobotPose(updateX=True, updateY=True)
             elif wsLoc == WS_MOVE_BACKWARD:
                 controller.updateRobotPose(updateX=True, updateY=True)
                 controller.incrementRadius(direction="backward", precision=usePrecision)
-                pass
-            elif wsLoc == WS_LEFT_FORWARD:
-                controller.updateRobotPose(updateX=True, updateY=True)
-                controller.turnHorizontally(direction="left", precision=usePrecision)
-                controller.incrementRadius(direction="forward", precision=usePrecision)
-                pass
-            elif wsLoc == WS_LEFT_BACKWARD:
-                controller.updateRobotPose(updateX=True, updateY=True)
-                controller.turnHorizontally(direction="right", precision=usePrecision)
-                controller.incrementRadius(direction="backward", precision=usePrecision)
-                pass
-            elif wsLoc == WS_RIGHT_FORWARD:
-                controller.updateRobotPose(updateX=True, updateY=True)
-                controller.turnHorizontally(direction="right", precision=usePrecision)
-                controller.incrementRadius(direction="forward", precision=usePrecision)
-                pass
+                # controller.updateRobotPose(updateX=True, updateY=True)
             elif wsLoc == WS_MISC and currentGesture == GRIP:
                 controller.incrementGripper(direction="close")
-                pass
             elif wsLoc == WS_MISC and currentGesture == UNGRIP:
                 controller.incrementGripper(direction="open")
-                pass
             elif wsLoc == WS_MISC and currentGesture == MOVE_HEIGHT:
                 controller.updateRobotPose(updateZ=True)
                 depth,_ = hm.getHandDepth()
                 controller.incrementHeight(depth=depth, range=depthRange)
+                # controller.updateRobotPose(updateZ=True)
             elif wsLoc == WS_MISC and currentGesture == TILT_UP:
                 # controller.incrementTilt(direction="up")
                 controller.incrementOrientation(direction="up")

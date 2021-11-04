@@ -91,8 +91,6 @@ class CameraStream:
             grey_color = 153
             colorImage = np.where((depthImage3d > clippingDistance[1]) | (depthImage3d <= clippingDistance[0]), grey_color, colorImage)
 
-        depthColormap = self.getColorMap(depthImage)
-
         depthImgInMeter = (depthImage3d * self.depthScale)
 
         images = np.hstack((colorImage, depthImgInMeter))

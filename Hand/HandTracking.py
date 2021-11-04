@@ -41,7 +41,7 @@ class HandTracking:
 
     def getLiveLandamarks(self, visualize=False):
         '''
-        Extracts one image from camera stream and runs hand detection on it.
+        Extracts one image from camera stream and run hand detection on it.
         
         In:
             visualize: (Bool)

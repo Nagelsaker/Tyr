@@ -296,7 +296,7 @@ class HandModel():
             latestLandmarks = self.slidingWindow[-1]
         except Exception:
             print("Error getting palm location: No hand detected yet!")
-            return [1920/2, 1080/2, 0]
+            return [1/2, 1/2, 0]
         x = np.array([latestLandmarks[0][0]['X'], latestLandmarks[0][1]['X'], latestLandmarks[0][5]['X'],
                     latestLandmarks[0][9]['X'], latestLandmarks[0][13]['X'], latestLandmarks[0][17]['X']]).mean()
         y = np.array([latestLandmarks[0][0]['Y'], latestLandmarks[0][1]['Y'], latestLandmarks[0][5]['Y'],
@@ -339,41 +339,52 @@ class HandModel():
         '''
         palmPos = np.array([int(self.getPalmLocation()[0]*imgWidth), int(self.getPalmLocation()[1]*imgHeight)])
 
-        if (self.workspace["TurnLeft"]["XRange"][0] < palmPos[0] < self.workspace["TurnLeft"]["XRange"][1] and
-            self.workspace["TurnLeft"]["YRange"][0] < palmPos[1] < self.workspace["TurnLeft"]["YRange"][1]):
+        if self.workspace["MoveBackward"][palmPos[0]][palmPos[1]] == True:
+            return WS_MOVE_BACKWARD
+        elif self.workspace["TurnLeft"][palmPos[0]][palmPos[1]] == True:
             return WS_TURN_LEFT
-
-        if (self.workspace["TurnRight"]["XRange"][0] < palmPos[0] < self.workspace["TurnRight"]["XRange"][1] and
-            self.workspace["TurnRight"]["YRange"][0] < palmPos[1] < self.workspace["TurnRight"]["YRange"][1]):
+        elif self.workspace["TurnRight"][palmPos[0]][palmPos[1]] == True:
             return WS_TURN_RIGHT
-
-        if (self.workspace["MoveForward"]["XRange"][0] < palmPos[0] < self.workspace["MoveForward"]["XRange"][1] and
-            self.workspace["MoveForward"]["YRange"][0] < palmPos[1] < self.workspace["MoveForward"]["YRange"][1]):
+        elif self.workspace["Misc"][palmPos[0]][palmPos[1]] == True:
+            return WS_MISC
+        elif self.workspace["MoveForward"][palmPos[0]][palmPos[1]] == True:
             return WS_MOVE_FORWARD
 
-        if (self.workspace["MoveBackward"]["XRange"][0] < palmPos[0] < self.workspace["MoveBackward"]["XRange"][1] and
-            self.workspace["MoveBackward"]["YRange"][0] < palmPos[1] < self.workspace["MoveBackward"]["YRange"][1]):
-            return WS_MOVE_BACKWARD
+        # if (self.workspace["TurnLeft"]["XRange"][0] < palmPos[0] < self.workspace["TurnLeft"]["XRange"][1] and
+        #     self.workspace["TurnLeft"]["YRange"][0] < palmPos[1] < self.workspace["TurnLeft"]["YRange"][1]):
+        #     return WS_TURN_LEFT
 
-        if (self.workspace["Misc"]["XRange"][0] < palmPos[0] < self.workspace["Misc"]["XRange"][1] and
-            self.workspace["Misc"]["YRange"][0] < palmPos[1] < self.workspace["Misc"]["YRange"][1]):
-            return WS_MISC
+        # if (self.workspace["TurnRight"]["XRange"][0] < palmPos[0] < self.workspace["TurnRight"]["XRange"][1] and
+        #     self.workspace["TurnRight"]["YRange"][0] < palmPos[1] < self.workspace["TurnRight"]["YRange"][1]):
+        #     return WS_TURN_RIGHT
 
-        if (self.workspace["LeftForward"]["XRange"][0] < palmPos[0] < self.workspace["LeftForward"]["XRange"][1] and
-            self.workspace["LeftForward"]["YRange"][0] < palmPos[1] < self.workspace["LeftForward"]["YRange"][1]):
-            return WS_LEFT_FORWARD
+        # if (self.workspace["MoveForward"]["XRange"][0] < palmPos[0] < self.workspace["MoveForward"]["XRange"][1] and
+        #     self.workspace["MoveForward"]["YRange"][0] < palmPos[1] < self.workspace["MoveForward"]["YRange"][1]):
+        #     return WS_MOVE_FORWARD
 
-        if (self.workspace["LeftBackward"]["XRange"][0] < palmPos[0] < self.workspace["LeftBackward"]["XRange"][1] and
-            self.workspace["LeftBackward"]["YRange"][0] < palmPos[1] < self.workspace["LeftBackward"]["YRange"][1]):
-            return WS_LEFT_BACKWARD
+        # if (self.workspace["MoveBackward"]["XRange"][0] < palmPos[0] < self.workspace["MoveBackward"]["XRange"][1] and
+        #     self.workspace["MoveBackward"]["YRange"][0] < palmPos[1] < self.workspace["MoveBackward"]["YRange"][1]):
+        #     return WS_MOVE_BACKWARD
 
-        if (self.workspace["RightBackward"]["XRange"][0] < palmPos[0] < self.workspace["RightBackward"]["XRange"][1] and
-            self.workspace["RightBackward"]["YRange"][0] < palmPos[1] < self.workspace["RightBackward"]["YRange"][1]):
-            return WS_RIGHT_BACKWARD
+        # if (self.workspace["Misc"]["XRange"][0] < palmPos[0] < self.workspace["Misc"]["XRange"][1] and
+        #     self.workspace["Misc"]["YRange"][0] < palmPos[1] < self.workspace["Misc"]["YRange"][1]):
+        #     return WS_MISC
 
-        if (self.workspace["RightForward"]["XRange"][0] < palmPos[0] < self.workspace["RightForward"]["XRange"][1] and
-            self.workspace["RightForward"]["YRange"][0] < palmPos[1] < self.workspace["RightForward"]["YRange"][1]):
-            return WS_RIGHT_FORWARD
+        # if (self.workspace["LeftForward"]["XRange"][0] < palmPos[0] < self.workspace["LeftForward"]["XRange"][1] and
+        #     self.workspace["LeftForward"]["YRange"][0] < palmPos[1] < self.workspace["LeftForward"]["YRange"][1]):
+        #     return WS_LEFT_FORWARD
+
+        # if (self.workspace["LeftBackward"]["XRange"][0] < palmPos[0] < self.workspace["LeftBackward"]["XRange"][1] and
+        #     self.workspace["LeftBackward"]["YRange"][0] < palmPos[1] < self.workspace["LeftBackward"]["YRange"][1]):
+        #     return WS_LEFT_BACKWARD
+
+        # if (self.workspace["RightBackward"]["XRange"][0] < palmPos[0] < self.workspace["RightBackward"]["XRange"][1] and
+        #     self.workspace["RightBackward"]["YRange"][0] < palmPos[1] < self.workspace["RightBackward"]["YRange"][1]):
+        #     return WS_RIGHT_BACKWARD
+
+        # if (self.workspace["RightForward"]["XRange"][0] < palmPos[0] < self.workspace["RightForward"]["XRange"][1] and
+        #     self.workspace["RightForward"]["YRange"][0] < palmPos[1] < self.workspace["RightForward"]["YRange"][1]):
+        #     return WS_RIGHT_FORWARD
         
 
     def getFingerAngles(self):

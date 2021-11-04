@@ -35,7 +35,7 @@ class Controller():
         self.jointPositionClient = SetJointPositionClient()
         self.jointSubscriber =  JointPositionSubscriber()
 
-        self.pose = self.poseSubscriber.getPose()
+        self.pose = copy.deepcopy(self.poseSubscriber.getPose())
         self.jointPositions = self.jointSubscriber.getPositions()
         self.desiredPose = self.pose
 
@@ -80,14 +80,18 @@ class Controller():
         y_new = r_new * np.sin(alpha)
 
         newPose = copy.deepcopy(self.pose)
-        newPose["position"]["x"] = np.around(x_new, 4)
-        newPose["position"]["y"] = np.around(y_new, 4)
-        newPose["position"]["z"] = np.around(z, 4)
+        # newPose["position"]["x"] = np.around(x_new, 4)
+        # newPose["position"]["y"] = np.around(y_new, 4)
+        # newPose["position"]["z"] = np.around(z, 4)
+        newPose["position"]["x"] = x_new
+        newPose["position"]["y"] = y_new
+        newPose["position"]["z"] = z
 
         point = np.array([x_new, y_new, z])
 
         if self.isPointInWorkspace(point):
             self.requestPose(newPose)
+            self.pose = copy.deepcopy(newPose)
         else:
             print("Obstacle Alert!")
 
@@ -106,14 +110,18 @@ class Controller():
         z_new = z + z_delta
 
         newPose = copy.deepcopy(self.pose)
-        newPose["position"]["x"] = np.around(x, 4)
-        newPose["position"]["y"] = np.around(y, 4)
-        newPose["position"]["z"] = np.around(z_new, 4)
+        # newPose["position"]["x"] = np.around(x, 4)
+        # newPose["position"]["y"] = np.around(y, 4)
+        # newPose["position"]["z"] = np.around(z_new, 4)
+        newPose["position"]["x"] = x
+        newPose["position"]["y"] = y
+        newPose["position"]["z"] = z_new
 
         point = np.array([x, y, z_new])
 
         if self.isPointInWorkspace(point):
             self.requestPose(newPose)
+            self.pose = copy.deepcopy(newPose)
         else:
             print("Obstacle Alert!")
 
@@ -141,14 +149,18 @@ class Controller():
         y_new = r * np.sin(alpha_new)
 
         newPose = copy.deepcopy(self.pose)
-        newPose["position"]["x"] = np.around(x_new, 4)
-        newPose["position"]["y"] = np.around(y_new, 4)
-        newPose["position"]["z"] = np.around(z, 4)
+        # newPose["position"]["x"] = np.around(x_new, 5)
+        # newPose["position"]["y"] = np.around(y_new, 5)
+        # newPose["position"]["z"] = np.around(z, 5)
+        newPose["position"]["x"] = x_new
+        newPose["position"]["y"] = y_new
+        newPose["position"]["z"] = z
 
         point = np.array([x_new, y_new, z])
 
         if self.isPointInWorkspace(point):
             self.requestPose(newPose)
+            self.pose = copy.deepcopy(newPose)
         else:
             print("Obstacle Alert!")
 
@@ -217,16 +229,17 @@ class Controller():
         rclpy.spin_once(self.poseSubscriber) # Update pose
         newPose = self.poseSubscriber.getPose()
         if updateX:
-            self.pose["position"]["x"] = newPose["position"]["x"]
+            self.pose["position"]["x"] = copy.deepcopy(newPose["position"]["x"])
         if updateY:
-            self.pose["position"]["y"] = newPose["position"]["y"]
+            self.pose["position"]["y"] = copy.deepcopy(newPose["position"]["y"])
         if updateZ:
-            self.pose["position"]["z"] = newPose["position"]["z"]
+            self.pose["position"]["z"] = copy.deepcopy(newPose["position"]["z"])
 
         self.pose["orientation"] = copy.deepcopy(newPose["orientation"])
 
         rclpy.spin_once(self.jointSubscriber) # Update positions
         self.jointPositions = self.jointSubscriber.getPositions()
+        
     
     def endController(self):
         self.poseSubscriber.destroy_node()

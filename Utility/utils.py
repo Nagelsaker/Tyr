@@ -1,4 +1,4 @@
-import math
+import json
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -110,134 +110,89 @@ def zRotToMat(ang):
 
     return R
 
+def loadWorkspace():
+    workspaceSections = loadDictFromJSON("data/ws_section")
+    workspaceOverlay = cv2.imread("data/ws_overlay.jpg")
+    return workspaceOverlay, workspaceSections
 
-
-def generateWorkspace(imageHeight, imageWidth, layerSize):
+def generateWorkspace(imageHeight, imageWidth, r1, r2, offset):
     height, width = imageHeight, imageWidth
-    layerSizeH, layerSizeW = layerSize
     turnColor = 0 # Red
     moveColor = 2 # Blue
     miscColor = 1 # Green
     intensity = 125
-    checkerSize = 1 # Can only be 1 TODO: Fix
 
-    workspaceSections = {} # Key: [[yMin, yMax], [xMin, xMax]]
+    workspaceSections = {} # Key: [imageHeight x imageWidth Array(Bool)]
+    workspaceSections["MoveBackward"] = np.zeros([width, height]).astype(bool)
+    workspaceSections["MoveForward"] = np.zeros([width, height]).astype(bool)
+    workspaceSections["TurnLeft"] = np.zeros([width, height]).astype(bool)
+    workspaceSections["TurnRight"] = np.zeros([width, height]).astype(bool)
+    workspaceSections["Misc"] = np.zeros([width, height]).astype(bool)
 
-    workspace = np.zeros((height, width, 3))
+    workspaceOverlay = np.zeros((height, width, 3))
 
-    # Turn left
-    layerIndices = np.zeros((height, width), dtype=bool)
-    layerIndices[int(height*(1-layerSizeH)/2):int(height*(1+layerSizeH)/2), 0:int(width*(1-layerSizeW)/2)] = True
-    workspace[layerIndices, turnColor] = intensity
-    workspaceSections["TurnLeft"] = {}
-    workspaceSections["TurnLeft"]["YRange"] = [int(height*(1-layerSizeH)/2), int(height*(1+layerSizeH)/2)]
-    workspaceSections["TurnLeft"]["XRange"] = [0,                            int(width*(1-layerSizeW)/2)]
+    a1 = (height+offset) / (width/2)
+    a2 = (-height-offset) / (width/2)
 
-    # Turn right
-    layerIndices = np.zeros((height, width), dtype=bool)
-    layerIndices[int(height*(1-layerSizeH)/2):int(height*(1+layerSizeH)/2), int(width*(1+layerSizeW)/2):] = True
-    workspace[layerIndices, turnColor] = intensity
-    workspaceSections["TurnRight"] = {}
-    workspaceSections["TurnRight"]["YRange"] = [int(height*(1-layerSizeH)/2), int(height*(1+layerSizeH)/2)]
-    workspaceSections["TurnRight"]["XRange"] = [int(width*(1+layerSizeW)/2),  width]
+    # Transformation from image coordinates to workspace coordinates
+    H_im_w = np.array([[1, 0, -width/2],
+                    [0, 1, -height - offset],
+                    [0, 0, 1]])
 
-    # Move Forward
-    layerIndices = np.zeros((height, width), dtype=bool)
-    layerIndices[0:int(height*(1-layerSizeH)/2), int(width*(1-layerSizeW)/2):int(width*(1+layerSizeW)/2)] = True
-    workspace[layerIndices, moveColor] = intensity
-    workspaceSections["MoveForward"] = {}
-    workspaceSections["MoveForward"]["YRange"] = [0,                           int(height*(1-layerSizeH)/2)]
-    workspaceSections["MoveForward"]["XRange"] = [int(width*(1-layerSizeW)/2), int(width*(1+layerSizeW)/2)]
+    X_im = np.array([[x, y, 1] for x in range(width) for y in range(height)]).T
+    X_w = H_im_w @ X_im
 
-    # Move Backward
-    layerIndices = np.zeros((height, width), dtype=bool)
-    layerIndices[int(height*(1+layerSizeH)/2):, int(width*(1-layerSizeW)/2):int(width*(1+layerSizeW)/2)] = True
-    workspace[layerIndices, moveColor] = intensity
-    workspaceSections["MoveBackward"] = {}
-    workspaceSections["MoveBackward"]["YRange"] = [int(height*(1+layerSizeH)/2), height]
-    workspaceSections["MoveBackward"]["XRange"] = [int(width*(1-layerSizeW)/2),  int(width*(1+layerSizeW)/2)]
+    for idx in range(X_w.shape[1]):
+        x_w, y_w, _ = X_w[:,idx]
+        x, y, _ = X_im[:,idx]
 
-    # Misc Section
-    layerIndices = np.zeros((height, width), dtype=bool)
-    layerIndices[int(height*(1-layerSizeH)/2):int(height*(1+layerSizeH)/2), int(width*(1-layerSizeW)/2):int(width*(1+layerSizeW)/2)] = True
-    workspace[layerIndices, miscColor] = intensity
-    workspaceSections["Misc"] = {}
-    workspaceSections["Misc"]["YRange"] = [int(height*(1-layerSizeH)/2), int(height*(1+layerSizeH)/2)]
-    workspaceSections["Misc"]["XRange"] = [int(width*(1-layerSizeW)/2),  int(width*(1+layerSizeW)/2)]
+        if x_w**2 + y_w**2 < r1**2:
+            # Point is located in MoveBackward section
+            workspaceSections["MoveBackward"][x,y] = True
+            workspaceOverlay[y, x, moveColor] = intensity
+        elif x_w**2 + y_w**2 < r2**2:
+            # Point is located in either TurnLeft, TurnRight or Misc section
+            if y_w > a1*x_w:
+                # Point is located in TurnLeft section
+                workspaceSections["TurnLeft"][x,y] = True
+                workspaceOverlay[y, x, turnColor] = intensity
+            elif y_w > a2*x_w:
+                # Point is located in TurnRight section
+                workspaceSections["TurnRight"][x,y] = True
+                workspaceOverlay[y, x, turnColor] = intensity
+            else:
+                # Point is located in Misc section
+                workspaceSections["Misc"][x,y] = True
+            workspaceOverlay[y, x, miscColor] = intensity
+        else:
+            # Point is located in MoveForward section
+            workspaceSections["MoveForward"][x,y] = True
+            workspaceOverlay[y, x, moveColor] = intensity
 
-    # Turn Left & Move Forward
-    layerIndices = np.zeros((height, width), dtype=bool)
-    checkerIndices = np.zeros((int(height*(1-layerSizeH)/2), int(width*(1-layerSizeW)/2)), dtype=bool)
-    checkerIndices[::(2*checkerSize), ::(2*checkerSize)] = np.ones((checkerSize), dtype=bool)
-    checkerIndices[checkerSize::(2*checkerSize), checkerSize::(2*checkerSize)] = True
+    # Save Workspace
+    saveDictAsJSON(workspaceSections, "data/ws_section")
+    cv2.imwrite("data/ws_overlay.jpg", workspaceOverlay)
 
-    blueIndices = np.copy(layerIndices)
-    redIndices = np.copy(layerIndices)
-    blueIndices[0:int(height*(1-layerSizeH)/2), 0:int(width*(1-layerSizeW)/2)] = checkerIndices
-    redIndices[0:int(height*(1-layerSizeH)/2), 0:int(width*(1-layerSizeW)/2)] = np.invert(checkerIndices)
-
-    workspace[blueIndices, moveColor] = intensity
-    workspace[redIndices, turnColor] = intensity
-    workspaceSections["LeftForward"] = {}
-    workspaceSections["LeftForward"]["YRange"] = [0, int(height*(1-layerSizeH)/2)]
-    workspaceSections["LeftForward"]["XRange"] = [0, int(width*(1-layerSizeW)/2)]
-
-    # Turn Left & Move Backward
-    layerIndices = np.zeros((height, width), dtype=bool)
-    checkerIndices = np.zeros((int(height*(1-layerSizeH)/2), int(width*(1-layerSizeW)/2)), dtype=bool)
-    checkerIndices[::(2*checkerSize), ::(2*checkerSize)] = True
-    checkerIndices[checkerSize::(2*checkerSize), checkerSize::(2*checkerSize)] = True
-
-    blueIndices = np.copy(layerIndices)
-    redIndices = np.copy(layerIndices)
-    blueIndices[int(height*(1+layerSizeH)/2):, 0:int(width*(1-layerSizeW)/2)] = checkerIndices
-    redIndices[int(height*(1+layerSizeH)/2):, 0:int(width*(1-layerSizeW)/2)] = np.invert(checkerIndices)
-
-    workspace[blueIndices, moveColor] = intensity
-    workspace[redIndices, turnColor] = intensity
-    workspaceSections["LeftBackward"] = {}
-    workspaceSections["LeftBackward"]["YRange"] = [int(height*(1+layerSizeH)/2), height]
-    workspaceSections["LeftBackward"]["XRange"] = [0, int(width*(1-layerSizeW)/2)]
-
-    # Turn Right & Move Backward
-    layerIndices = np.zeros((height, width), dtype=bool)
-    checkerIndices = np.zeros((int(height*(1-layerSizeH)/2), int(width*(1-layerSizeW)/2)), dtype=bool)
-    checkerIndices[::(2*checkerSize), ::(2*checkerSize)] = True
-    checkerIndices[checkerSize::(2*checkerSize), checkerSize::(2*checkerSize)] = True
-
-    blueIndices = np.copy(layerIndices)
-    redIndices = np.copy(layerIndices)
-    blueIndices[int(height*(1+layerSizeH)/2):, int(width*(1+layerSizeW)/2):] = checkerIndices
-    redIndices[int(height*(1+layerSizeH)/2):, int(width*(1+layerSizeW)/2):] = np.invert(checkerIndices)
-
-    workspace[blueIndices, moveColor] = intensity
-    workspace[redIndices, turnColor] = intensity
-    workspaceSections["RightBackward"] = {}
-    workspaceSections["RightBackward"]["YRange"] = [int(height*(1+layerSizeH)/2), height]
-    workspaceSections["RightBackward"]["XRange"] = [int(width*(1+layerSizeW)/2), width]
-
-    # Turn Right & Move Forward
-    layerIndices = np.zeros((height, width), dtype=bool)
-    checkerIndices = np.zeros((int(height*(1-layerSizeH)/2), int(width*(1-layerSizeW)/2)), dtype=bool)
-    checkerIndices[::(2*checkerSize), ::(2*checkerSize)] = True
-    checkerIndices[checkerSize::(2*checkerSize), checkerSize::(2*checkerSize)] = True
-
-    blueIndices = np.copy(layerIndices)
-    redIndices = np.copy(layerIndices)
-    blueIndices[0:int(height*(1-layerSizeH)/2), int(width*(1+layerSizeW)/2):] = checkerIndices
-    redIndices[0:int(height*(1-layerSizeH)/2), int(width*(1+layerSizeW)/2):] = np.invert(checkerIndices)
-
-    workspace[blueIndices, moveColor] = intensity
-    workspace[redIndices, turnColor] = intensity
-    workspaceSections["RightForward"] = {}
-    workspaceSections["RightForward"]["YRange"] = [0, int(height*(1-layerSizeH)/2)]
-    workspaceSections["RightForward"]["XRange"] = [int(width*(1+layerSizeW)/2), width]
-                                         
-    return workspace, workspaceSections
+    return workspaceOverlay, workspaceSections
 
 
+def saveDictAsJSON(dict, fname):
+    finalDict = {k:v.tolist() for k,v in dict.items()}
+    with open(f"{fname}.json", "w") as fp:
+        json.dump(finalDict, fp)
 
-def drawLandmarks(results, image, workspaceOverlay):
+def saveArrayAsJSON(array):
+    pass
+
+def loadDictFromJSON(fname):
+    data = None
+    with open(f"{fname}.json") as fp:
+        data = json.load(fp)
+        data = {k:np.array(v) for k,v in data.items()}
+    return data
+
+
+def drawLandmarks(results, image, workspaceOverlay, thread=None):
     '''
     TEMP
     Draws the detected landmarks of a human hand on the video feed,
@@ -269,7 +224,10 @@ def drawLandmarks(results, image, workspaceOverlay):
                 mpHands.HAND_CONNECTIONS,
                 mpDrawingStyles.get_default_hand_landmarks_style(),
                 mpDrawingStyles.get_default_hand_connections_style())
-
+    
+    if thread is not None:
+        # Convert the image for Qimage, only accepts RGB Format
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     return image
 
     # Show stream
