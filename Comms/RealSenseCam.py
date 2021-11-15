@@ -122,11 +122,19 @@ class CameraStream:
 
 
 if __name__ == "__main__":
-    cs = CameraStream()
+    cs = CameraStream("836612072676")
     cs.start()
     try:
         while True:
-            cs.getAlignedImages()
+            images = cs.getAlignedImages()
+
+            imgHeight = images.shape[0]
+            imgWidth = int(images.shape[1] / 2)
+
+            colorImage = images[:, :imgWidth, :]
+            depthImage = images[:, imgWidth:, :]
+            print("")
+            # cv2.imwrite("3.jpg", colorImage)
     finally:
         cs.end()
     # while True:

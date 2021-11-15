@@ -10,7 +10,6 @@ from Comms.RealSenseCam import CameraStream
 from Comms.Communication import SetPositionClient, PoseSubscriber
 
 
-
 class HandTracking:
     def __init__(self, camSN):
         '''
@@ -233,13 +232,13 @@ def debug():
     '''
     Debug
     '''
-    rclpy.init()
-    handTracker = HandTracking()
-    positionClient = SetPositionClient()
-    poseSubscriber = PoseSubscriber()
+    # rclpy.init()
+    handTracker = HandTracking("836612072676")
+    # positionClient = SetPositionClient()
+    # poseSubscriber = PoseSubscriber()
     
-    rclpy.spin_once(poseSubscriber) # Update pose
-    pose = poseSubscriber.getPose()
+    # rclpy.spin_once(poseSubscriber) # Update pose
+    # pose = poseSubscriber.getPose()
 
     # pose = {"position": {"x" : 0.0, "y" : 0.0, "z" : 0.22},
     #         "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w" : 1.0}}
@@ -252,20 +251,21 @@ def debug():
     minRobotDepth = 0.08
     maxRobotDepth = 0.30
 
-    hm = HandModel(type="left")
+    # hm = HandModel(type="left")
 
     handTracker.startStream()
     prevHandDepth = minDepth
     try:
         while True: # Tracking loop
-            handPoints, image = handTracker.getLiveLandamarks(visualize=True)
-            hm.addMeasurement(handPoints)
+            handPoints, image, results = handTracker.getLiveLandamarks(visualize=True)
+            # hm.addMeasurement(handPoints)
+            tmp = None
 
     except KeyboardInterrupt:
         print("\nExiting..")
         handTracker.endStream() # Remember to end the stream
-        poseSubscriber.destroy_node()
-        rclpy.shutdown()
+        # poseSubscriber.destroy_node()
+        # rclpy.shutdown()
 
 def fullControlSimple():
     rclpy.init()
