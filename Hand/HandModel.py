@@ -82,8 +82,7 @@ class HandModel():
         self.wristTimer = 0
         self.timerThreshold = 0.8
         self.wristAngle_threshold = [-15, 15]
-
-        self.index_threshold = np.deg2rad([25, 40])
+        self.fingerAngle_threshold = 25 # In angles
 
     def addMeasurement(self, landmarks):
         if landmarks != {}:
@@ -249,7 +248,7 @@ class HandModel():
             angles = np.array(finger[1:]).flatten()
             #  TODO: Optimize threshold. Different threshold for thumb?
             #  Differ bewteen positive and negative angles?
-            threshold = np.deg2rad(25)
+            threshold = np.deg2rad(self.fingerAngle_threshold)
             if np.any(np.abs(angles) > threshold):
                 self.openFingers[idx] = 0
             else:
