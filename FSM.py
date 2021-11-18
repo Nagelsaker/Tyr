@@ -9,7 +9,7 @@ from Hand.HandModel import *
 
 class FSM():
     def __init__(self):
-        f = open("data/settings.json")
+        f = open("settings.json")
         settings = json.load(f)
         self.depthRange = settings["depthRange"] # [0.60, 0.85]
         self.pathTime = settings["pathTime"] # 0.2
