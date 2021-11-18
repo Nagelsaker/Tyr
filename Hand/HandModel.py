@@ -63,9 +63,12 @@ class HandModel():
         7:
             Tilt Up
     '''
-    def __init__(self, type, workspace):
+    def __init__(self, type, workspace, wristAngle_threshold, thumbAngle_threshold, fingerAngle_threshold):
         self.type = type
         self.workspace = workspace
+        self.wristAngle_threshold = wristAngle_threshold # Default for long [-15, 15]
+        self.thumbAngle_threshold = thumbAngle_threshold # Default for long [-15, -15]
+        self.fingerAngle_threshold = fingerAngle_threshold # Default for long [25, 25]
 
         self.fingerAngles = {}
         self.slidingWindow = []
@@ -73,17 +76,7 @@ class HandModel():
         self.windowSize = 10
         self.openFingers = np.ones(5)
         self.gesture = -1
-
-        self.timeSinceLastValidGesture = 99999
-        self.gamma = 0.5 # Seconds without valid gesture before stopping
         self.acceptedDepthVar = 0.03
-        self.gestureDetectedTime = np.ones(8)*time.time()
-        self.gripperTimer = 0
-        self.wristTimer = 0
-        self.timerThreshold = 0.8
-        self.wristAngle_threshold = [-15, 15]
-        self.thumbAngle_threshold = [-15, -15]
-        self.fingerAngle_threshold = 25 # In angles
 
     def setWristThreshold(self, threshold):
         self.wristAngle_threshold = threshold

@@ -51,7 +51,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.threshold_wristUp.valueChanged.connect(self.setWristThreshold)
         self.threshold_wristDown.valueChanged.connect(self.setWristThreshold)
         self.threshold_fingerAng1.valueChanged.connect(self.setFingerThreshold)
-        self.threshold_fingerAng2.valueChanged.connect(self.setFingerThreshold)
         self.threshold_thumbAng1.valueChanged.connect(self.setThumbThreshold)
         self.threshold_thumbAng2.valueChanged.connect(self.setThumbThreshold)
         
@@ -62,8 +61,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         
     def setFingerThreshold(self):
         th1 = self.threshold_fingerAng1.value()
-        th2 = self.threshold_fingerAng2.value()
-        self.videoStream.th.setFingerThreshold([th1, th2])
+        self.videoStream.th.setFingerThreshold(th1)
         
     def setThumbThreshold(self):
         th1 = self.threshold_thumbAng1.value()
