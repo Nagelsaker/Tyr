@@ -20,11 +20,11 @@ class Controller():
         self.imgWidth = imgWidth
         self.imgHeight = imgHeight
 
-        self.K_p_a = Kp[0]
+        self.K_p_psi = Kp[0]
         self.K_p_r = Kp[1]
         self.K_p_z = Kp[2]
-        self.K_p_t = Kp[3]
-        self.K_p_o = Kp[4]
+        self.K_p_theta = Kp[3]
+        self.K_p_phi = Kp[4]
 
         self.goal = np.array([-99, -99, -99])
 
@@ -63,7 +63,7 @@ class Controller():
         y = self.pose["position"]["y"]
         z = self.pose["position"]["z"]
         r = np.sqrt(x**2 + y**2)
-        alpha = np.arctan2(y, x)
+        psi = np.arctan2(y, x)
 
         if precision == True:
             r_delta = self.K_p_r / 5
@@ -76,8 +76,8 @@ class Controller():
             r_delta *= -1
 
         r_new = r + r_delta
-        x_new = r_new * np.cos(alpha)
-        y_new = r_new * np.sin(alpha)
+        x_new = r_new * np.cos(psi)
+        y_new = r_new * np.sin(psi)
 
         newPose = copy.deepcopy(self.pose)
         # newPose["position"]["x"] = np.around(x_new, 4)
@@ -132,21 +132,21 @@ class Controller():
         z = self.pose["position"]["z"]
 
         r = np.sqrt(x**2 + y**2)
-        alpha = np.arctan2(y, x)
+        psi = np.arctan2(y, x)
 
         if precision == True:
-            alpha_delta = self.K_p_a / 5
+            psi_delta = self.K_p_psi / 5
         else:
-            alpha_delta = self.K_p_a
+            psi_delta = self.K_p_psi
         
         if direction == "left":
-            alpha_delta *= 1
+            psi_delta *= 1
         elif direction == "right":
-            alpha_delta *= -1
+            psi_delta *= -1
 
-        alpha_new = alpha + alpha_delta
-        x_new = r * np.cos(alpha_new)
-        y_new = r * np.sin(alpha_new)
+        psi_new = psi + psi_delta
+        x_new = r * np.cos(psi_new)
+        y_new = r * np.sin(psi_new)
 
         newPose = copy.deepcopy(self.pose)
         # newPose["position"]["x"] = np.around(x_new, 5)
@@ -165,7 +165,7 @@ class Controller():
             print("Obstacle Alert!")
 
     def incrementTilt(self, direction):
-        gain = self.K_p_t
+        gain = self.K_p_theta
         if direction == "up":
             gain *= -1
         elif direction == "down":
@@ -176,7 +176,7 @@ class Controller():
         self.requestJointPositions(jointPositions)
 
     def incrementOrientation(self, direction):
-        gain = self.K_p_o
+        gain = self.K_p_phi
         if direction == "up":
             gain *= -1
         elif direction == "down":

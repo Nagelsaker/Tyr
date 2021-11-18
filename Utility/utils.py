@@ -115,7 +115,7 @@ def loadWorkspace():
     workspaceOverlay = cv2.imread("data/ws_overlay.jpg")
     return workspaceOverlay, workspaceSections
 
-def generateWorkspace(imageHeight, imageWidth, r1, r2, offset):
+def generateWorkspace(imageHeight, imageWidth, r1, r2, offset, bias=0):
     height, width = imageHeight, imageWidth
     turnColor = 0 # Red
     moveColor = 2 # Blue
@@ -133,6 +133,7 @@ def generateWorkspace(imageHeight, imageWidth, r1, r2, offset):
 
     a1 = (height+offset) / (width/2)
     a2 = (-height-offset) / (width/2)
+    b = bias # bias
 
     # Transformation from image coordinates to workspace coordinates
     H_im_w = np.array([[1, 0, -width/2],
@@ -152,11 +153,11 @@ def generateWorkspace(imageHeight, imageWidth, r1, r2, offset):
             workspaceOverlay[y, x, moveColor] = intensity
         elif x_w**2 + y_w**2 < r2**2:
             # Point is located in either TurnLeft, TurnRight or Misc section
-            if y_w > a1*x_w:
+            if y_w > a1*(x_w-b):
                 # Point is located in TurnLeft section
                 workspaceSections["TurnLeft"][x,y] = True
                 workspaceOverlay[y, x, turnColor] = intensity
-            elif y_w > a2*x_w:
+            elif y_w > a2*(x_w+b):
                 # Point is located in TurnRight section
                 workspaceSections["TurnRight"][x,y] = True
                 workspaceOverlay[y, x, turnColor] = intensity
@@ -253,3 +254,6 @@ def visualize(results, image, workspaceOverlay):
     cv2.imshow('MediaPipe Hands', image)
     if cv2.waitKey(5) & 0xFF == 27:
         return
+
+if __name__ == "__main__":
+    workspaceOverlay, workspaceSections = generateWorkspace(1080, 1920, 400, 900, 100, 30)

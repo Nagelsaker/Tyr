@@ -2,18 +2,30 @@ import time
 from PyQt5.QtWidgets import  QWidget, QLabel
 from PyQt5.QtCore import QThread, Qt, pyqtSignal, QSize, pyqtSlot
 from PyQt5.QtGui import QImage, QPixmap
-from FSM import fsm
+from FSM import FSM
 
 
 class Thread(QThread):
     changePixmap = pyqtSignal(QImage)
+    activateGesture = pyqtSignal(int)
+
     def __init__(self, parent, w, h):
         super().__init__(parent)
         self.w = w
         self.h = h
+        self.fsm = FSM()
 
     def run(self):
-        fsm(self)
+        self.fsm.run(self)
+    
+    def setWristThreshold(self, threshold):
+        self.fsm.setWristThreshold(threshold)
+    
+    def setFingerThreshold(self, threshold):
+        self.fsm.setFingerThreshold(threshold)
+    
+    def setThumbThreshold(self, threshold):
+        self.fsm.setThumbThreshold(threshold)
 
 class Stream(QWidget):
     def __init__(self, parent=None):
@@ -28,8 +40,9 @@ class Stream(QWidget):
         # self.label.move(280, 120)
         self.label.resize(self.w, self.h)
 
-        self.th = Thread(self, self.w, self.h)
+        self.th = Thread(self, self.w-5, self.h-5)
         self.th.changePixmap.connect(self.setImage)
+        self.th.activateGesture.connect(self.parent().parent().activateGesture)
         self.th.start()
 
     def setSize(self, width, height):

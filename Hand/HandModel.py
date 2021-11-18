@@ -72,7 +72,7 @@ class HandModel():
         self.depthWindow = []
         self.windowSize = 10
         self.openFingers = np.ones(5)
-        self.gesture = 0
+        self.gesture = -1
 
         self.timeSinceLastValidGesture = 99999
         self.gamma = 0.5 # Seconds without valid gesture before stopping
@@ -82,7 +82,17 @@ class HandModel():
         self.wristTimer = 0
         self.timerThreshold = 0.8
         self.wristAngle_threshold = [-15, 15]
+        self.thumbAngle_threshold = [-15, -15]
         self.fingerAngle_threshold = 25 # In angles
+
+    def setWristThreshold(self, threshold):
+        self.wristAngle_threshold = threshold
+
+    def setFingerThreshold(self, threshold):
+        self.fingerAngle_threshold = threshold
+
+    def setThumbThreshold(self, threshold):
+        self.thumbAngle_threshold = threshold
 
     def addMeasurement(self, landmarks):
         if landmarks != {}:
@@ -236,7 +246,7 @@ class HandModel():
         # Thumb
         finger = self.fingerAngles[0]
         angles = np.array(self.fingerAngles[0][1:])[:,0]
-        threshold = np.array([np.deg2rad(-15), np.deg2rad(-15)])
+        threshold = np.deg2rad(self.thumbAngle_threshold)
         if np.all(angles > threshold):
             self.openFingers[0] = 1
         else:
@@ -255,7 +265,7 @@ class HandModel():
                 self.openFingers[idx] = 1
         
         wristAngle = self.estimateWristAngle()
-        print(f"Angle: {wristAngle:.2f} \r", end="")
+        # print(f"Angle: {wristAngle:.2f} \r", end="")
 
         depth, var = self.getHandDepth()
 
@@ -275,12 +285,14 @@ class HandModel():
             elif wristAngle > self.wristAngle_threshold[1]:
                 self.gesture = TILT_DOWN
             else:
-                self.gesture = STOP
+                self.gesture = -1
         elif self.openFingers[0] == 0 and self.openFingers[1] == 1 and all(self.openFingers[2:] == 0):
             # Index finger open
             self.gesture = MOVE_HEIGHT
-        else:
+        elif self.openFingers[0] == 1 and all(self.openFingers[1:] == 0):
             self.gesture = STOP
+        else:
+            self.gesture = -1
 
 
     def getPalmLocation(self):
