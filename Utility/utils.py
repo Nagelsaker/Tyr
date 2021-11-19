@@ -1,5 +1,6 @@
 import json
 import cv2
+import os
 import numpy as np
 import mediapipe as mp
 from scipy.spatial.transform import Rotation as R
@@ -182,9 +183,6 @@ def saveDictAsJSON(dict, fname):
     with open(f"{fname}.json", "w") as fp:
         json.dump(finalDict, fp)
 
-def saveArrayAsJSON(array):
-    pass
-
 def loadDictFromJSON(fname):
     data = None
     with open(f"{fname}.json") as fp:
@@ -255,5 +253,20 @@ def visualize(results, image, workspaceOverlay):
     if cv2.waitKey(5) & 0xFF == 27:
         return
 
+def generateFilename(pathToDataset, type, name=None):
+    nrOfFiles = 0
+    for filename in os.listdir(pathToDataset):
+        if filename.endswith(f".{type}"):
+            if name is not None:
+                if not name in filename: continue
+            nrOfFiles += 1
+        else:
+            continue
+    
+    generatedFname = f"{pathToDataset}{nrOfFiles+1}_"
+    generatedFname += name if name is not None else ""
+    generatedFname += f".{type}"
+    return generatedFname
+
 if __name__ == "__main__":
-    workspaceOverlay, workspaceSections = generateWorkspace(1080, 1920, 400, 900, 100, 30)
+    workspaceOverlay, workspaceSections = generateWorkspace(1080, 1920, 375, 800, 100, 30)

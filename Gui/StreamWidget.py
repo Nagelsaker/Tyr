@@ -1,13 +1,18 @@
 import time
+import json
+import cv2
 from PyQt5.QtWidgets import  QWidget, QLabel
-from PyQt5.QtCore import QThread, Qt, pyqtSignal, QSize, pyqtSlot
+from PyQt5.QtCore import QThread, pyqtSignal, QSize, pyqtSlot
 from PyQt5.QtGui import QImage, QPixmap
 from FSM import FSM
+from Utility.utils import generateFilename
 
 
 class Thread(QThread):
     changePixmap = pyqtSignal(QImage)
     activateGesture = pyqtSignal(int)
+    updateSkeleton = pyqtSignal(list)
+    setDepthValue = pyqtSignal(float)
 
     def __init__(self, parent, w, h):
         super().__init__(parent)
@@ -26,10 +31,17 @@ class Thread(QThread):
     
     def setThumbThreshold(self, threshold):
         self.fsm.setThumbThreshold(threshold)
+    
+    def getCurrentImage(self):
+        return self.fsm.getCurrentImage()
 
 class Stream(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        f = open("settings.json")
+        settings = json.load(f)
+        self.pathToDataset = settings["pathToDataset"]
 
         # create a label
         self.label = QLabel(self)
@@ -43,6 +55,8 @@ class Stream(QWidget):
         self.th = Thread(self, self.w-5, self.h-5)
         self.th.changePixmap.connect(self.setImage)
         self.th.activateGesture.connect(self.parent().parent().activateGesture)
+        self.th.updateSkeleton.connect(self.parent().parent().updateSkeleton)
+        self.th.setDepthValue.connect(self.parent().parent().setDepthValue)
         self.th.start()
 
     def setSize(self, width, height):
@@ -55,6 +69,14 @@ class Stream(QWidget):
         time.sleep(0.2)
         while self.th.isRunning():
             continue
+    
+    def saveImage(self):
+        fname = generateFilename(self.pathToDataset, "jpg", "workspace")
+        im = self.th.getCurrentImage()
+        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        cv2.imwrite(fname, im)
+
+
 
     @pyqtSlot(QImage)
     def setImage(self, image):

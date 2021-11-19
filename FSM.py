@@ -1,7 +1,7 @@
 import json
 import numpy as np
 from Hand.HandTracking import HandTracking
-from Utility.utils import generateWorkspace, drawLandmarks, loadWorkspace, visualize
+from Utility.utils import drawLandmarks, loadWorkspace
 from Comms.Controller import Controller, Obstacle
 from PyQt5.QtGui import QImage
 from Hand.HandModel import *
@@ -11,11 +11,12 @@ class FSM():
     def __init__(self):
         f = open("settings.json")
         settings = json.load(f)
-        self.depthRange = settings["depthRange"] # [0.60, 0.85]
+        self.depthRange = settings["depthRange"] # Long range: [0.60, 0.85], Short range: [0.30, 0.59]
         self.pathTime = settings["pathTime"] # 0.2
         self.imgWidth = settings["imgWidth"]
         self.imgHeight = settings["imgHeight"]
         self.camSN = settings["camSN"]
+        useDepth = settings["useDepth"] == 1
         # Kp=[K_p_psi, K_p_r, K_p_z, K_p_theta, K_p_phi]
         self.Kp_default = settings["Kp_default"]
         wristAngle_threshold = settings["wristAngle_threshold"]
@@ -34,8 +35,9 @@ class FSM():
         self.workspaceOverlay, self.workspaceSections = loadWorkspace()
 
         self.handTracker = HandTracking(self.camSN)
-        self.hm = HandModel("left", self.workspaceSections, wristAngle_threshold, thumbAngle_threshold, fingerAngle_threshold)
+        self.hm = HandModel("left", self.workspaceSections, wristAngle_threshold, thumbAngle_threshold, fingerAngle_threshold, useDepth)
         self.controller = Controller(self.imgWidth, self.imgHeight, Kp=self.Kp_default, pathTime=self.pathTime, obstacles=self.obstacles)
+        self.imgLM = None
 
     def setWristThreshold(self, threshold):
         self.hm.setWristThreshold(threshold)
@@ -46,6 +48,9 @@ class FSM():
     def setThumbThreshold(self, threshold):
         self.hm.setThumbThreshold(threshold)
 
+    def getCurrentImage(self):
+        return self.imgLM
+    
     def run(self, thread=None):
         self.controller.updateRobotPose(updateX=True, updateY=True, updateZ=True)
         self.handTracker.startStream()
@@ -58,21 +63,25 @@ class FSM():
                     if thread.isInterruptionRequested():
                         raise Exception
 
-                    imgLM =  drawLandmarks(results, image, self.workspaceOverlay, thread)
-                    h, w, ch = imgLM.shape
+                    self.imgLM =  drawLandmarks(results, image, self.workspaceOverlay, thread)
+                    h, w, ch = self.imgLM.shape
                     bytesPerLine = ch * w
-                    convertToQtFormat = QImage(imgLM.data, w, h, bytesPerLine, QImage.Format_RGB888).scaled(thread.w, thread.h)
+                    convertToQtFormat = QImage(self.imgLM.data, w, h, bytesPerLine, QImage.Format_RGB888).scaled(thread.w, thread.h)
                     thread.changePixmap.emit(convertToQtFormat)
                 # visualize(results, image, self.workspaceOverlay) # Temp TODO Switch with an OperatorPanel object
                 
                 self.hm.addMeasurement(handPoints)
+                depth,_ = self.hm.getHandDepth()
                 
                 self.controller.updateRobotPose()
                 currentGesture = self.hm.getCurrentGesture()
                 wsLoc = self.hm.getWorkspaceLocation(self.imgHeight, self.imgWidth)
 
-                # Send Current gesture to GUI application
-                thread.activateGesture.emit(currentGesture)
+                if len(handPoints) != 0:
+                    # Send Current gesture to GUI application
+                    thread.activateGesture.emit(currentGesture)
+                    thread.updateSkeleton.emit(handPoints[0])
+                    thread.setDepthValue.emit(depth*100)
 
                 # FSM
                 usePrecision = (currentGesture==PRECISION)
@@ -90,26 +99,17 @@ class FSM():
                     self.controller.updateRobotPose(updateX=True, updateY=True)
                     self.controller.incrementRadius(direction="backward", precision=usePrecision)
                 elif wsLoc == WS_MISC and currentGesture == GRIP:
-                    # thread.activateGesture.emit(1)
                     self.controller.incrementGripper(direction="close")
                 elif wsLoc == WS_MISC and currentGesture == UNGRIP:
-                    # thread.activateGesture.emit(0)
                     self.controller.incrementGripper(direction="open")
                 elif wsLoc == WS_MISC and currentGesture == MOVE_HEIGHT:
-                    # thread.activateGesture.emit(4)
                     self.controller.updateRobotPose(updateZ=True)
-                    depth,_ = self.hm.getHandDepth()
-                    self.controller.incrementHeight(depth=depth, range=self.depthRange)
+                    self.controller.incrementHeight(depth=self.hm.getHandDepthSensor(), range=self.depthRange)
                 elif wsLoc == WS_MISC and currentGesture == TILT_UP:
-                    # thread.activateGesture.emit(2)
                     self.controller.incrementOrientation(direction="up")
                 elif wsLoc == WS_MISC and currentGesture == TILT_DOWN:
-                    # thread.activateGesture.emit(2)
                     self.controller.incrementOrientation(direction="down")
-                # elif currentGesture == STOP:
-                    # thread.activateGesture.emit(5)
-                # else:
-                    # thread.activateGesture.emit(-1)
+
 
         except Exception as e:
             print(f"{str(e)}")

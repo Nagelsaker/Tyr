@@ -1,20 +1,5 @@
-'''
-* Updated regularly with (up to) 21 landmarks
-* Should calculate which fingers are straight and closed (probabilities?)
-* Should have a sliding window of x (10?) measurements to increase stability.
-* If there is a sudden jump in depth, do not save current depth, and use an average
-    of the window depths instead.
-* Should decide hand gesture based on finger poses. Probabilities?
-* If no hand gesture can be determined, choose either the stop gesture, or the previous one.
-
-* TODO: Figure out if the measurements need filtering. PDAF?
-* TODO: Grip functionality is a little more complex than what I first imagined. Fix?
-
-'''
-
 import Utility.utils as utils
 import datetime
-import time
 import numpy as np
 
 
@@ -63,12 +48,13 @@ class HandModel():
         7:
             Tilt Up
     '''
-    def __init__(self, type, workspace, wristAngle_threshold, thumbAngle_threshold, fingerAngle_threshold):
+    def __init__(self, type, workspace, wristAngle_threshold, thumbAngle_threshold, fingerAngle_threshold, useDepth):
         self.type = type
         self.workspace = workspace
         self.wristAngle_threshold = wristAngle_threshold # Default for long [-15, 15]
         self.thumbAngle_threshold = thumbAngle_threshold # Default for long [-15, -15]
         self.fingerAngle_threshold = fingerAngle_threshold # Default for long [25, 25]
+        self.useDepth = useDepth
 
         self.fingerAngles = {}
         self.slidingWindow = []
@@ -223,12 +209,13 @@ class HandModel():
 
     def estimateWristAngle(self):
         latestLandmarks = self.slidingWindow[-1]
-        wristDepth = latestLandmarks[0][0]["Depth"]
+        depthSensor = "Depth" if self.useDepth else "Z"
+        wristDepth = latestLandmarks[0][0][depthSensor]
         p0 = np.array([latestLandmarks[0][0]["X"], latestLandmarks[0][0]["Y"], 0])
-        p5 = np.array([latestLandmarks[0][5]["X"], latestLandmarks[0][5]["Y"], latestLandmarks[0][5]["Depth"] - wristDepth])
-        p9 = np.array([latestLandmarks[0][9]["X"], latestLandmarks[0][9]["Y"], latestLandmarks[0][9]["Depth"] - wristDepth])
-        p13 = np.array([latestLandmarks[0][13]["X"], latestLandmarks[0][13]["Y"], latestLandmarks[0][13]["Depth"] - wristDepth])
-        p17 = np.array([latestLandmarks[0][17]["X"], latestLandmarks[0][17]["Y"], latestLandmarks[0][17]["Depth"] - wristDepth])
+        p5 = np.array([latestLandmarks[0][5]["X"], latestLandmarks[0][5]["Y"], latestLandmarks[0][5][depthSensor] - wristDepth])
+        p9 = np.array([latestLandmarks[0][9]["X"], latestLandmarks[0][9]["Y"], latestLandmarks[0][9][depthSensor] - wristDepth])
+        p13 = np.array([latestLandmarks[0][13]["X"], latestLandmarks[0][13]["Y"], latestLandmarks[0][13][depthSensor] - wristDepth])
+        p17 = np.array([latestLandmarks[0][17]["X"], latestLandmarks[0][17]["Y"], latestLandmarks[0][17][depthSensor] - wristDepth])
         p_avg = (p5 + p9 + p13 + p17)/4
 
         dist_xy = np.linalg.norm(p_avg[:2] - p0[:2])
@@ -309,7 +296,7 @@ class HandModel():
                     latestLandmarks[0][9]['Z'], latestLandmarks[0][13]['Z'], latestLandmarks[0][17]['Z']]).mean()
         return np.array([x, y, z])
 
-    def getHandDepth(self):
+    def getHandDepth(self, overrideDepthSetting=False):
         '''
         Returns the average hand depth from all 21 landmarks, with outliers removed
         '''
@@ -318,7 +305,11 @@ class HandModel():
         except Exception:
             print("Error getting hand depth: No hand detected yet!")
             return 0, 0
-        depths = np.array([round(latestLandmarks[0][i]['Depth'], 3) for i in range(len(latestLandmarks[0]))])
+        depthSensor = "Depth" if self.useDepth else "Z"
+
+        if overrideDepthSetting: depthSensor = "Depth"
+
+        depths = np.array([round(latestLandmarks[0][i][depthSensor], 3) for i in range(len(latestLandmarks[0]))])
         var = np.var(depths)
         estDepth = np.median(depths) # Reduces the effect from outliers
         mean = np.mean(depths)
@@ -333,6 +324,9 @@ class HandModel():
         # print(f"Estimator :\t{estDepth:.3f}\t\t Mean: {mean:.3f}\t\tVar: \t{var:.3f} \r", end="")
         return estDepth, var
 
+    def getHandDepthSensor(self):
+        depth,_ = self.getHandDepth(overrideDepthSetting=True)
+        return depth
 
     def getWorkspaceLocation(self, imgHeight, imgWidth):
         '''

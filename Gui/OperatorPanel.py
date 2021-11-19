@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import  QMainWindow
 from Gui.Ui_MainWindow import Ui_MainWindow
 from Gui.SettingsDialog import SettingsDialog
 from Hand.HandModel import *
-
+import json
 
 STOP = 0
 GRIP = 1
@@ -53,6 +53,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.threshold_fingerAng1.valueChanged.connect(self.setFingerThreshold)
         self.threshold_thumbAng1.valueChanged.connect(self.setThumbThreshold)
         self.threshold_thumbAng2.valueChanged.connect(self.setThumbThreshold)
+
+        # Buttons
+        self.saveData.clicked.connect(self.saveDataPoints)
+
+        # Load default threshold values
+        f = open("settings.json")
+        settings = json.load(f)
+        self.threshold_wristUp.setValue(settings["wristAngle_threshold"][0])
+        self.threshold_wristDown.setValue(settings["wristAngle_threshold"][1])
+        self.threshold_fingerAng1.setValue(settings["fingerAngle_threshold"])
+        self.threshold_thumbAng1.setValue(settings["thumbAngle_threshold"][0])
+        self.threshold_thumbAng2.setValue(settings["thumbAngle_threshold"][1])
         
     def setWristThreshold(self):
         th1 = self.threshold_wristUp.value()
@@ -68,6 +80,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         th2 = self.threshold_thumbAng2.value()
         self.videoStream.th.setThumbThreshold([th1, th2])
 
+    def setDepthValue(self, value):
+        self.depthDisplay.display(value)
+
     def openDialog(self):
         settingsDialog = SettingsDialog(self)
         settingsDialog.show()
@@ -82,8 +97,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     self.gestureImages[i].deactivate()
         if idx == -1: self.currentGesture = idx
     
-    def getThresholdWristUpValue(self):
-        return self.threshold_wristUp.value()
+    def updateSkeleton(self, landmarks):
+        self.skeletonWidget.updatePoints(landmarks)
+        # self.skeletonWidget_synthetic.updatePoints(landmarks)
+    
+    def saveDataPoints(self):
+        self.skeletonWidget.save()
+        self.videoStream.saveImage()
 
 
     def closeEvent(self, event):
