@@ -46,6 +46,7 @@ class SkeletonWidget(QWidget):
         layout = QVBoxLayout()
         layout.addWidget(self.canvas)
         self.setLayout(layout)
+
         
     def updatePoints(self, landmarks):
         if len(landmarks) == 0: return

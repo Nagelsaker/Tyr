@@ -57,9 +57,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Buttons
         self.saveData.clicked.connect(self.saveDataPoints)
 
-        # Load default threshold values
+        # Load settings
         f = open("settings.json")
         settings = json.load(f)
+        self.advancedUse = settings["advancedUse"] == 1
+
+        if not self.advancedUse:
+            self.skeletonWidget.setHidden(True)
+
+        # Load default threshold values
         self.threshold_wristUp.setValue(settings["wristAngle_threshold"][0])
         self.threshold_wristDown.setValue(settings["wristAngle_threshold"][1])
         self.threshold_fingerAng1.setValue(settings["fingerAngle_threshold"])
@@ -98,11 +104,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if idx == -1: self.currentGesture = idx
     
     def updateSkeleton(self, landmarks):
-        self.skeletonWidget.updatePoints(landmarks)
-        # self.skeletonWidget_synthetic.updatePoints(landmarks)
+        if self.advancedUse:
+            self.skeletonWidget.updatePoints(landmarks)
     
     def saveDataPoints(self):
-        self.skeletonWidget.save()
+        if self.advancedUse:
+            self.skeletonWidget.save()
         self.videoStream.saveImage()
 
 
