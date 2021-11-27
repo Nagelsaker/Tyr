@@ -4,18 +4,28 @@ import rclpy
 import numpy as np
 import mediapipe as mp
 from pathlib import Path
-from Hand.HandModel import HandModel
 from Comms.SimpleController import SimpleController
 from Comms.RealSenseCam import CameraStream
 from Comms.Communication import SetPositionClient, PoseSubscriber
 
 
 class HandTracking:
+    '''
+    Class that tracks hands with the MediaPipe API. Also includes depth information
+    of detections, produced by the Intel RealSense Depth Camera D435.
+
+    Attributes
+    ----------
+        camSN: String
+            serial number for camera used to track operator hand
+        handPoints: Dict(Dict: Float)
+            detected 21 3D landmarks
+        image: (1920x1080x3) Array(Float)
+            rgb image from camera
+        camStream: CameraStream
+            image stream
+    '''
     def __init__(self, camSN):
-        '''
-        Module that tracks hands with the MediaPipe API. Also includes depth information
-        of detections, produced by the Intel RealSense Depth Camera D435.
-        '''
         self.camSN = camSN
         self.mpDrawing = mp.solutions.drawing_utils
         self.mpDrawingStyles = mp.solutions.drawing_styles
@@ -27,34 +37,32 @@ class HandTracking:
 
     def startStream(self):
         '''
-        Starts streaming from the stereoscopic sensor
+        Function which starts streaming from the stereoscopic sensor
         '''
         self.camStream = CameraStream(self.camSN)
         self.camStream.start()
     
     def endStream(self):
         '''
-        Stops the camera sensor stream
+        Fucntion which stops the camera sensor stream
         '''
         self.camStream.end()
 
     def getLiveLandamarks(self, visualize=False):
         '''
-        Extracts one image from camera stream and run hand detection on it.
+        Function which run hand detection on latest image frame from stream
         
         In:
             visualize: (Bool)
-        
         Out:
-            handDepth: (Float) Hand depth at wrist point
-            estHandPosition: (Array) X and Y position of wrist point in image
-            handPoints: (Dict) 21 hand landmarks
-            image: (Array) RGB image from depth sensor
+            handPoints: Dict(Dict: Float)
+                detected 21 3D landmarks
+            image: (1920x1080x3) Array(Float)
+                rgb image from camera
+            results: mpHands.Hands.process
         '''
         with self.mpHands.Hands(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
-            # images = self.camStream.getAlignedImages(clippingDistanceInMeters=np.array([0.3, 1]))
             images = self.camStream.getAlignedImages(clippingDistanceInMeters=0)
-            # images = self.camStream.getAlignedImages()
             if np.all(images == -1):
                 return -1 # Empty frames
             
@@ -68,8 +76,7 @@ class HandTracking:
             image = cv2.cvtColor(colorImage.astype("uint8"), cv2.COLOR_BGR2RGB)
             image = cv2.flip(image, -1)
             depthImage = cv2.flip(depthImage, -1)
-            # To improve performance, optionally mark the image as not writeable to
-            # pass by reference.
+            # To improve performance mark the image as not writeable to pass by reference.
             image.flags.writeable = False
             
             # Note that handedness is determined assuming the input image is mirrored,
@@ -79,8 +86,6 @@ class HandTracking:
 
             handPoints = {}
             handIdx = 0
-            handDepth = -1
-            estHandPosition = -1
 
             if results.multi_hand_landmarks:
                 for handLandmarks in results.multi_hand_landmarks:
@@ -111,6 +116,16 @@ class HandTracking:
             return handPoints, image, results
 
     def getCurrentLandmarks(self):
+        '''
+        Function which returns current landmarks
+
+        Out:
+            handPoints: Dict(Dict: Float)
+                detected 21 3D landmarks
+            image: (1920x1080x3) Array(Float)
+                rgb image from camera
+            results: mpHands.Hands.process
+        '''
         return self.handPoints, self.image, self.results
 
     def drawLandmarks(self, results, image):
@@ -118,9 +133,11 @@ class HandTracking:
         Draws the detected landmarks of a human hand on the video feed,
         and displays it.
 
+        Used for debugging purposes
+
         In:
-            results: TODO
-            image: array
+            results: mpHands.Hands.process
+            image: (1920x1080x3) Array(Float)
         '''
         # Draw the hand annotations on the image.
         image.flags.writeable = True
@@ -143,7 +160,9 @@ class HandTracking:
 
     def trackStaticImgs(self, dataDir, saveAnnotations=False):
         '''
-        Fucntion made for debug purposes. Track from stream instead
+        Fucntion which tracks hands in single images.
+        
+        Made for debug purposes
         '''
         imgFiles = glob.glob(f"{dataDir}/imgs/*.jpg")
 
@@ -186,6 +205,8 @@ def depthDemonstration():
     '''
     Demonstration function for controlling the OpenManipulator-X with only depth
     information from the tracking information.
+
+    Made for debugging purposes
     '''
     rclpy.init()
     handTracker = HandTracking()
@@ -194,9 +215,6 @@ def depthDemonstration():
     
     rclpy.spin_once(poseSubscriber) # Update pose
     pose = poseSubscriber.getPose()
-
-    # pose = {"position": {"x" : 0.0, "y" : 0.0, "z" : 0.22},
-    #         "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w" : 1.0}}
 
     minDepth = 0.25
     maxDepth = 0.40
@@ -227,55 +245,16 @@ def depthDemonstration():
         rclpy.shutdown()
 
 
-
-def debug():
-    '''
-    Debug
-    '''
-    # rclpy.init()
-    handTracker = HandTracking("836612072676")
-    # positionClient = SetPositionClient()
-    # poseSubscriber = PoseSubscriber()
-    
-    # rclpy.spin_once(poseSubscriber) # Update pose
-    # pose = poseSubscriber.getPose()
-
-    # pose = {"position": {"x" : 0.0, "y" : 0.0, "z" : 0.22},
-    #         "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w" : 1.0}}
-
-    minDepth = 0.25
-    maxDepth = 0.40
-    pathTime = 0.2
-    maxRobotDepth = 0.30
-
-    minRobotDepth = 0.08
-    maxRobotDepth = 0.30
-
-    # hm = HandModel(type="left")
-
-    handTracker.startStream()
-    prevHandDepth = minDepth
-    try:
-        while True: # Tracking loop
-            handPoints, image, results = handTracker.getLiveLandamarks(visualize=True)
-            # hm.addMeasurement(handPoints)
-            tmp = None
-
-    except KeyboardInterrupt:
-        print("\nExiting..")
-        handTracker.endStream() # Remember to end the stream
-        # poseSubscriber.destroy_node()
-        # rclpy.shutdown()
-
 def fullControlSimple():
+    '''
+    Made for debugging purposes
+    '''
     rclpy.init()
     handTracker = HandTracking()
     positionClient = SetPositionClient()
     poseSubscriber = PoseSubscriber()
     controller = SimpleController(1080, 1920)
 
-    # pose = {"position": {"x" : 0.0, "y" : 0.0, "z" : 0.22},
-    #         "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w" : 1.0}}
 
     minDepth = 0.3
     maxDepth = 0.6
@@ -309,10 +288,3 @@ def fullControlSimple():
         handTracker.endStream() # Remember to end the stream
         poseSubscriber.destroy_node()
         rclpy.shutdown()
-
-
-
-if __name__ == "__main__":
-    # depthDemonstration()
-    # main()
-    debug()

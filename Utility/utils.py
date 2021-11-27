@@ -6,12 +6,27 @@ import mediapipe as mp
 from scipy.spatial.transform import Rotation as R
 
 def euler_from_quaternion(quaternion):
+    '''
+    Function that converts  from quaternion to euler representation (rad)
+
+    In:
+        quaternion: (4x1) Array(Float)
+    Out:
+        (3x1) Array(Float)
+    '''
     r = R.from_quat(quaternion)
     euler = r.as_euler("xyz")
     return euler # in radians
 
 def quaternion_from_euler(euler):
-    roll_x, pitch_y, yaw_z = euler
+    '''
+    Function that converts euler angles (rad) to quaternion
+
+    In:
+        euler: (3x1) Array(Float)
+    Out:
+        (4x1) Array(Float)
+    '''
     r = R.from_euler('xyz', euler, degrees=False)
     quaternion = r.as_quat()
     return quaternion
@@ -97,10 +112,10 @@ def yRotToMat(ang):
 def zRotToMat(ang):
     '''
     In:
-        ang:    (float) Angle in radians
-
+        ang:    Float
+            Angle in radians
     Out:
-        R:  (3x3 Array(Float))
+        R:  (3x3) Array(Float)
     '''
 
     R = np.diag([0, 0 ,1]).astype(np.float)
@@ -112,11 +127,36 @@ def zRotToMat(ang):
     return R
 
 def loadWorkspace():
+    '''
+    Load operator workspace stored under "data/"
+
+    Out:
+        workspaceOverlay: (1920 x 1080 x 3) Array(Float)
+        workSpaceSections: Dict: (1920 x 1080) Array(Bool)
+    '''
     workspaceSections = loadDictFromJSON("data/ws_section")
     workspaceOverlay = cv2.imread("data/ws_overlay.jpg")
     return workspaceOverlay, workspaceSections
 
 def generateWorkspace(imageHeight, imageWidth, r1, r2, offset, bias=0):
+    '''
+    Function that generates operator workspace
+
+    In:
+        imageHeight: Float
+        imageWidth: Float
+        r1: Float
+            inner radius of turn/misc section
+        r2: Float
+            outer radius of turn/misc section
+        offset: Float
+            turn/misc disk offset in y direction
+        bias: Float
+            larger bias increases the turn sections
+    Out:
+        workspaceOverlay: (1920 x 1080 x 3) Array(Float)
+        workSpaceSections: Dict: (1920 x 1080) Array(Bool)
+    '''
     height, width = imageHeight, imageWidth
     turnColor = 0 # Red
     moveColor = 2 # Blue
@@ -163,7 +203,7 @@ def generateWorkspace(imageHeight, imageWidth, r1, r2, offset, bias=0):
                 workspaceSections["TurnRight"][x,y] = True
                 workspaceOverlay[y, x, turnColor] = intensity
             else:
-                # Point is located in Misc section
+                # Point is lmpHandsocated in Misc section
                 workspaceSections["Misc"][x,y] = True
             workspaceOverlay[y, x, miscColor] = intensity
         else:
@@ -179,11 +219,26 @@ def generateWorkspace(imageHeight, imageWidth, r1, r2, offset, bias=0):
 
 
 def saveDictAsJSON(dict, fname):
+    '''
+    Function that saves a dictionary to a JSON file
+
+    In:
+        dict: Dict
+        fname: String
+    '''
     finalDict = {k:v.tolist() for k,v in dict.items()}
     with open(f"{fname}.json", "w") as fp:
         json.dump(finalDict, fp)
 
 def loadDictFromJSON(fname):
+    '''
+    Function that loads a dictionary from a JSON file
+
+    In:
+        fname: String
+    Out:
+        data: Dict
+    '''
     data = None
     with open(f"{fname}.json") as fp:
         data = json.load(fp)
@@ -193,13 +248,15 @@ def loadDictFromJSON(fname):
 
 def drawLandmarks(results, image, workspaceOverlay, thread=None):
     '''
-    TEMP
-    Draws the detected landmarks of a human hand on the video feed,
-    and displays it.
+    Function that draws a 2D skeleton on top of a detected human hand in an image
 
     In:
-        results: TODO
-        image: array
+        results: mpHands.Hands.process
+        image: (1920x1080x3) Array(Float)
+        workspaceOverlay: (1920 x 1080 x 3) Array(Float)
+        thread: QThread
+    Out:
+        (1920x1080x3) Array(Float)
     '''
     # Draw the hand annotations on the image.
     image = image.astype("uint8")
@@ -229,21 +286,15 @@ def drawLandmarks(results, image, workspaceOverlay, thread=None):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     return image
 
-    # Show stream
-    # cv2.namedWindow('MediaPipe Hands', cv2.WINDOW_NORMAL)
-    # cv2.imshow('MediaPipe Hands', image)
-    # if cv2.waitKey(5) & 0xFF == 27:
-    #     return
-
 def visualize(results, image, workspaceOverlay):
     '''
-    TEMP
-    Draws the detected landmarks of a human hand on the video feed,
-    and displays it.
+    Function that draws a 2D skeleton on top of a detected human hand in an image
+    and displays it
 
     In:
-        results: TODO
-        image: array
+        results: mpHands.Hands.process
+        image: (1920x1080x3) Array(Float)
+        workspaceOverlay: (1920 x 1080 x 3) Array(Float)
     '''
     image = drawLandmarks(results, image, workspaceOverlay)
 

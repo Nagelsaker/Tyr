@@ -1,6 +1,5 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Quaternion
@@ -11,7 +10,12 @@ from open_manipulator_msgs.srv import SetKinematicsPose, SetJointPosition
 
 
 class SetPositionClient(Node):
+    '''
+    SetPositionClient class
 
+    Client node which requests a position for the manipulators end-effector from the
+    set_position_node server node
+    '''
     def __init__(self):
         super().__init__('set_position_node')
         self.cli = self.create_client(SetKinematicsPose, '/goal_joint_space_path_to_kinematics_position')
@@ -22,6 +26,9 @@ class SetPositionClient(Node):
     def sendRequest(self, goalPose={"position": {"x" : 0.1, "y" : 0.0, "z" : 0.22},
                                 "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w" : 1.0}},
                                 pathTime=1.5):
+        '''
+        Function which sends a position request to the manipulator
+        '''
         
         pose = Pose()
 
@@ -53,7 +60,13 @@ class SetPositionClient(Node):
 
 
 class SetOrientationClient(Node):
+    '''
+    SetOrientationClient class
 
+    Client node which communicates with the Robotis OpenManipulator through
+    the ROS2 framework. Requests an orientation of the end-effector from the
+    set_orientation_node server node
+    '''
     def __init__(self):
         super().__init__('set_orientation_node')
         self.cli = self.create_client(SetKinematicsPose, '/goal_joint_space_path_to_kinematics_orientation')
@@ -64,6 +77,9 @@ class SetOrientationClient(Node):
     def sendRequest(self, goalPose={"position": {"x" : 0.1, "y" : 0.0, "z" : 0.22},
                                 "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w" : 1.0}},
                                 pathTime=1.5):
+        '''
+        Function which requests an orientation of the end-effector
+        '''
         
         pose = Pose()
 
@@ -95,7 +111,12 @@ class SetOrientationClient(Node):
 
 
 class SetJointPositionClient(Node):
+    '''
+    SetJointPositionClient class
 
+    Client node which requests position for the fourth joint from the
+    set_joint_position_node server node
+    '''
     def __init__(self):
         super().__init__('set_joint_position_node')
         self.cli = self.create_client(SetJointPosition, '/goal_joint_space_path')
@@ -105,7 +126,9 @@ class SetJointPositionClient(Node):
 
     def sendRequest(self, position, pathTime=1.5):
         '''
-        Assuming joint = joint4 for now
+        Function which requests fourth joint position
+
+        Assuming joint = joint4
         '''
 
         minVal = -1.80
@@ -130,7 +153,11 @@ class SetJointPositionClient(Node):
         self.future = self.cli.call_async(self.req)
 
 class SetGripperDistanceClient(Node):
+    '''
+    SetGripperDistanceClient class
 
+    Client node which requests gripper distance from the set_gripper_node server node
+    '''
     def __init__(self):
         super().__init__('set_gripper_node')
         self.cli = self.create_client(SetJointPosition, '/goal_tool_control')
@@ -169,7 +196,11 @@ class SetGripperDistanceClient(Node):
 
 
 class PoseSubscriber(Node):
+    '''
+    PoseSubscriber class
 
+    Subscriber which listens to the kinematics_pose topic
+    '''
     def __init__(self):
         super().__init__('kinematics_pose')
         self.subscription = self.create_subscription(
@@ -201,7 +232,11 @@ class PoseSubscriber(Node):
 
 
 class JointPositionSubscriber(Node):
+    '''
+    JointPositionSubscriber class
 
+    Subscriber which listens to the joint_states topic
+    '''
     def __init__(self):
         super().__init__('joint_states')
         self.subscription = self.create_subscription(

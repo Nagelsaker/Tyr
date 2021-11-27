@@ -1,0 +1,16 @@
+# Constants
+# Hand gestures
+STOP = 0
+GRIP = 1
+UNGRIP = 2
+PRECISION = 3
+TILT_UP = 4
+TILT_DOWN = 5
+MOVE_HEIGHT = 6
+
+# Workspace locations
+WS_TURN_LEFT = 0
+WS_TURN_RIGHT = 1
+WS_MOVE_FORWARD = 2
+WS_MOVE_BACKWARD = 3
+WS_MISC = 8

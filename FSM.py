@@ -8,10 +8,42 @@ from Hand.HandModel import *
 
 
 class FSM():
+    '''
+    A class representing a finite state machine
+
+    The FSM swicthes between different control states for the Robotis
+    OpenManipulator, based on the input signals from an operator.
+    For further information on the inpu signals, see the documentation
+    on HandModel and HandTracking.
+
+    Attributes
+    ----------
+        depthRange : 2x1 Array(Float)
+            the range from min to max, which yields max to min manipulator movement
+        pathTime: float
+            time it takes for the manipulator to move to desired position
+        imgWidth: int
+            image width
+        imgHeight: int
+            image height
+        camSN: str
+            serial number for the camera recording operators hand
+        Kp_default: (5x1) Array(Float)
+            controller parameters for the velocity controllers
+        handTracker: HandTracking
+            hand tracking object
+        hm: HandModel
+            hand model object
+        controller: Controller
+            controller object
+        imgLM:
+            current workspace image with hand landmarks drawn
+    '''
     def __init__(self):
         f = open("settings.json")
         settings = json.load(f)
-        self.depthRange = settings["depthRange"] # Long range: [0.60, 0.85], Short range: [0.30, 0.59]
+        # Long range: [0.60, 0.85], Short range: [0.30, 0.59]
+        self.depthRange = settings["depthRange"]
         self.pathTime = settings["pathTime"] # 0.2
         self.imgWidth = settings["imgWidth"]
         self.imgHeight = settings["imgHeight"]
@@ -40,18 +72,38 @@ class FSM():
         self.imgLM = None
 
     def setWristThreshold(self, threshold):
+        '''
+        In:
+            threshold: (2x1) Array(float)
+        '''
         self.hm.setWristThreshold(threshold)
 
     def setFingerThreshold(self, threshold):
+        '''
+        In:
+            threshold: (float)
+        '''
         self.hm.setFingerThreshold(threshold)
 
     def setThumbThreshold(self, threshold):
+        '''
+        In:
+            threshold: (2x1) Array(float)
+        '''
         self.hm.setThumbThreshold(threshold)
 
     def getCurrentImage(self):
+        '''
+        Out:
+            (2x1) (1080x1920x3) Array(float)
+        '''
         return self.imgLM
     
     def run(self, thread=None):
+        '''
+        In:
+            thread: (QThread) object
+        '''
         self.controller.updateRobotPose(updateX=True, updateY=True, updateZ=True)
         self.handTracker.startStream()
 
@@ -68,7 +120,6 @@ class FSM():
                     bytesPerLine = ch * w
                     convertToQtFormat = QImage(self.imgLM.data, w, h, bytesPerLine, QImage.Format_RGB888).scaled(thread.w, thread.h)
                     thread.changePixmap.emit(convertToQtFormat)
-                # visualize(results, image, self.workspaceOverlay) # Temp TODO Switch with an OperatorPanel object
                 
                 self.hm.addMeasurement(handPoints)
                 depth,_ = self.hm.getHandDepth()
@@ -115,7 +166,6 @@ class FSM():
 
         except Exception as e:
             print(f"{str(e)}")
-            # print("\nExiting..")
             self.handTracker.endStream() # Remember to end the stream
             self.controller.endController()
             if thread is not None:

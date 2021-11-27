@@ -1,59 +1,54 @@
+from Utility.constants import *
 import Utility.utils as utils
-import datetime
 import numpy as np
-
-
-# Constants
-# Hand gestures
-STOP = 0
-GRIP = 1
-UNGRIP = 2
-PRECISION = 3
-TILT_UP = 4
-TILT_DOWN = 5
-MOVE_HEIGHT = 6
-
-# Workspace locations
-WS_TURN_LEFT = 0
-WS_TURN_RIGHT = 1
-WS_MOVE_FORWARD = 2
-WS_MOVE_BACKWARD = 3
-WS_LEFT_FORWARD = 4
-WS_LEFT_BACKWARD = 5
-WS_RIGHT_BACKWARD = 6
-WS_RIGHT_FORWARD = 7
-WS_MISC = 8
-
 
 class HandModel():
     '''
-    Fingers: [thumb, index, middle, ring, pinky]
-    Gestures:
-        0:  Stop moving
-                [1, 1, 1, 1, 1]
-        1:  Grip
-                [1, 1, 0, 0, 0]
-                * Thumb and index touching
-        2:  Release grip
-                [1, 1, 0, 0, 0]
-                * Thumb and index not touching
-        3:  Turn in the xy plane
-                [1, 0, 0, 0, 0]
-        4:  Move in xz plane
-                [0, 0, 0, 0, 0]
-        5:  Move to standard pose
-                [0, 1, 0, 0, 0]
-        6:
-            Tilt Down
-        7:
-            Tilt Up
+    HandModel class
+
+    Models a human left hand. Is easily expanded to include right hands and multiple hands.
+    For now, this functionality is not needed.
+
+    Note: the last value from the windows are always used, as the system is stable
+    without averaging over all entries. The window structure remains, if future work
+    should deem it necessary to implement averaging.
+
+    Attributes
+    ----------
+        type: Str
+            Currently only supports 'left hand' type
+        workspace: Dict: (1920x1080) Array(Bool)
+            dictionary over all workspace sections: misc, turn left/right
+            and move forward/backward
+        wristAngle_threshold: (2x1) Array(Float)
+        self.thumbAngle_threshold: (2x1) Array(Float)
+        fingerAngle_threshold: (Float)
+        useDepth: Bool
+            if True, use measured depth to acquire angles and hand position
+            if False, use synthetic data
+
+        fingerAngles: Dict
+        slidingWindow: (10x1) Array
+            Can be used to choose current gesture from an average
+            Contains Landmarks
+        depthWindow: (10x2) Array
+            Contains palm depth (median) from measured landmark depths and variance
+        windowSize: Int
+            size of depthWindow and slidingWindow
+        openFingers: (5x1) Array(Int)
+            array of integers representing closed (0) and open (1) fingers
+        gesture: Int
+            current detected gesture
+        acceptedDepthVar: Float
+            If the variance in depth is too large, the measurement should not be trusted
+
     '''
     def __init__(self, type, workspace, wristAngle_threshold, thumbAngle_threshold, fingerAngle_threshold, useDepth):
         self.type = type
         self.workspace = workspace
         self.wristAngle_threshold = wristAngle_threshold # Default for long [-15, 15]
         self.thumbAngle_threshold = thumbAngle_threshold # Default for long [-15, -15]
-        self.fingerAngle_threshold = fingerAngle_threshold # Default for long [25, 25]
+        self.fingerAngle_threshold = fingerAngle_threshold # Default for long 25
         self.useDepth = useDepth
 
         self.fingerAngles = {}
@@ -65,15 +60,31 @@ class HandModel():
         self.acceptedDepthVar = 0.03
 
     def setWristThreshold(self, threshold):
+        '''
+        In:
+            threshold: (2x1) Array(float)
+        '''
         self.wristAngle_threshold = threshold
 
     def setFingerThreshold(self, threshold):
+        '''
+        In:
+            threshold: (float)
+        '''
         self.fingerAngle_threshold = threshold
 
     def setThumbThreshold(self, threshold):
+        '''
+        In:
+            threshold: (2x1) Array(float)
+        '''
         self.thumbAngle_threshold = threshold
 
     def addMeasurement(self, landmarks):
+        '''
+        In:
+            landmarks: Dict: (List(Dict: Float))
+        '''
         if landmarks != {}:
             self.slidingWindow.append(landmarks)
             if len(self.slidingWindow) > self.windowSize:
@@ -84,7 +95,8 @@ class HandModel():
 
     def calculateFingerAngles(self):
         '''
-        Calculates theta and beta angles for all links in each finger.
+        Function which calculates theta and beta angles for all links in each finger.
+
         Theta represents the angle between link (i-1) and (i) in the xy plane,
         while beta represents the angle in the xz plane. Keep in mind that
         new rotations are multiplied from the right according to 'current frames',
@@ -186,13 +198,15 @@ class HandModel():
         Calculates transformation matrix from one finger joint (i-1) to joint (i)
 
         In:
-            theta:  (Float) radians, rotation along z
-            beta:   (Float) radians, rotation along y
-            translation:    (3x1 Array(Float)) translation from (i-1) to (i)
-                            in (i-1) coordinate system
-
+            theta: (Float)
+                radians, rotation along z
+            beta: (Float)
+                radians, rotation along y
+            translation: (3x1 Array(Float))
+                translation from (i-1) to (i)
+                in (i-1) coordinate system
         Out:
-            H:  (4x4 Array(Float))
+            H: (4x4) Array(Float)
         '''
         R_z = utils.zRotToMat(theta)
         R_y = utils.yRotToMat(beta)
@@ -208,6 +222,12 @@ class HandModel():
 
 
     def estimateWristAngle(self):
+        '''
+        Function which estimates the wrist angle
+
+        The angle is defined as the angle in XY plane between the wrist and
+        the fingertips.
+        '''
         latestLandmarks = self.slidingWindow[-1]
         depthSensor = "Depth" if self.useDepth else "Z"
         wristDepth = latestLandmarks[0][0][depthSensor]
@@ -223,6 +243,20 @@ class HandModel():
         return wristAngle
 
     def estimateGesture(self):
+        '''
+        Function which estimates the current gesture
+
+        The estimate is based on the finger angles, and whether they are
+        within given thresholds. Finger statuses are saved to 'openFingers' array.
+        Current gesture is saved to 'gesture' and can be any of the following:
+        GRIP
+        UNGRIP
+        PRECISION
+        TILT_UP
+        TILT_DOWN
+        MOVE_HEIGHT
+        STOP
+        '''
         # Thumb
         finger = self.fingerAngles[0]
         angles = np.array(self.fingerAngles[0][1:])[:,0]
@@ -236,8 +270,6 @@ class HandModel():
             finger = self.fingerAngles[idx]
             # Skipping first finger angle for now
             angles = np.array(finger[1:]).flatten()
-            #  TODO: Optimize threshold. Different threshold for thumb?
-            #  Differ bewteen positive and negative angles?
             threshold = np.deg2rad(self.fingerAngle_threshold)
             if np.any(np.abs(angles) > threshold):
                 self.openFingers[idx] = 0
@@ -245,9 +277,6 @@ class HandModel():
                 self.openFingers[idx] = 1
         
         wristAngle = self.estimateWristAngle()
-        # print(f"Angle: {wristAngle:.2f} \r", end="")
-
-        depth, var = self.getHandDepth()
 
         if all(self.openFingers == 0):
             # All fingers closed
@@ -277,11 +306,14 @@ class HandModel():
 
     def getPalmLocation(self):
         '''
+        Function which estimates the palm location in the image frame.
+
         Estimates the palm location by averaging over the positions of points
-        0, 1, 5, 9, 13, and 17.
+        0, 1, 5, 9, 13, and 17. Visit MediaPipe Hand section for further
+        information on landmark positions
 
         Out:
-            (3x1 Array(Float))
+            (3x1) Array(Float)
         '''
         try:
             latestLandmarks = self.slidingWindow[-1]
@@ -298,7 +330,19 @@ class HandModel():
 
     def getHandDepth(self, overrideDepthSetting=False):
         '''
-        Returns the average hand depth from all 21 landmarks, with outliers removed
+        Function which estimates the measured hand depth.
+
+        The estimate is the median of the measured depth at the image
+        position of all 21 landmarks. The median reduces the effects from outliers,
+        which may occure when a finger is misdetected, causing its depth to be that
+        of the background.
+
+        In:
+            overrideDepthSetting: Bool
+                if True allways use measured depth over synthetic
+        Out:
+            estDepth: Float
+            var: Float
         '''
         try:
             latestLandmarks = self.slidingWindow[-1]
@@ -312,7 +356,6 @@ class HandModel():
         depths = np.array([round(latestLandmarks[0][i][depthSensor], 3) for i in range(len(latestLandmarks[0]))])
         var = np.var(depths)
         estDepth = np.median(depths) # Reduces the effect from outliers
-        mean = np.mean(depths)
 
         if var < self.acceptedDepthVar or len(self.depthWindow) == 0:
             self.depthWindow.append([estDepth, var])
@@ -325,15 +368,27 @@ class HandModel():
         return estDepth, var
 
     def getHandDepthSensor(self):
+        '''
+        Function which returns the depth of the hand
+
+        Out:
+            depth: Float
+        '''
         depth,_ = self.getHandDepth(overrideDepthSetting=True)
         return depth
 
     def getWorkspaceLocation(self, imgHeight, imgWidth):
         '''
-        Returns the grid position of the palm
-        workspaceIndices:
-            keys: TurnLeft, TurnRight, MoveForward, MoveBackward, Misc, LeftForward, LeftBackward, RightBackward, RightForward
-            secondary keys: XRange, YRange
+        Returns the workspace section in which the hand is located
+
+        Workspace sections could be any of the following:
+        WS_MOVE_FORWARD
+        WS_MOVE_BACKWARD
+        WS_TURN_LEFT
+        WS_TURN_RIGHT
+        WS_MISC
+
+        Out: Int
         '''
         palmPos = np.array([int(self.getPalmLocation()[0]*imgWidth), int(self.getPalmLocation()[1]*imgHeight)])
 
@@ -351,14 +406,15 @@ class HandModel():
 
     def getFingerAngles(self):
         '''
+        Function which returns finger angles
+
         Out:
-            (Dict = "0"-"4": 1x2 Array(Float))
+            (Dict = "0"-"4": (1x2) Array(Float))
         '''
         return self.fingerAngles
 
     def getCurrentGesture(self):
+        '''
+        Function which returns the current gesture
+        '''
         return self.gesture
-
-    def log(self, measurement):
-        timestamp = datetime.datetime.now()
-        # TODO
