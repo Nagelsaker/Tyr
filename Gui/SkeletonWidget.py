@@ -11,7 +11,7 @@ class SkeletonWidget(QWidget):
     angle1 = 0
     angle2 = 15
     dir = 1
-    rotate = False
+    rotate = True
     landmarks = None
 
     def __init__(self, parent=None):

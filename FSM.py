@@ -109,6 +109,8 @@ class FSM():
                     self.controller.incrementOrientation(direction="up")
                 elif wsLoc == WS_MISC and currentGesture == TILT_DOWN:
                     self.controller.incrementOrientation(direction="down")
+                else:
+                    continue # Either STOP or unknown command
 
 
         except Exception as e:
