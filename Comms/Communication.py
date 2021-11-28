@@ -169,7 +169,8 @@ class SetGripperDistanceClient(Node):
     def sendRequest(self, position, pathTime=0.4):
         '''
         In:
-            position: (Float) Valid numbers between -0.010 and 0.010 (m)
+            position: (Float)
+                Valid numbers between -0.010 and 0.010 (m)
             pathTime: (Float)
         '''
         
