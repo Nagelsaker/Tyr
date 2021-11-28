@@ -84,9 +84,6 @@ class SetOrientationClient(Node):
         pose = Pose()
 
         point = Point()
-        # point.x = goalPose["position"]["x"]
-        # point.y = goalPose["position"]["y"]
-        # point.z = goalPose["position"]["z"]
         pose.position = point
 
         quaternion = Quaternion()

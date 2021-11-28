@@ -325,8 +325,6 @@ class Controller():
         newPose["orientation"] = copy.deepcopy(orientation)
         self.requestOrientation(newPose)
 
-
-
     def incrementGripper(self, direction):
         '''
         Method which increments the gripper distance by either -0.10 or 0.10 m.

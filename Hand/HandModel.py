@@ -21,12 +21,11 @@ class HandModel():
             dictionary over all workspace sections: misc, turn left/right
             and move forward/backward
         wristAngle_threshold: (2x1) Array(Float)
-        self.thumbAngle_threshold: (2x1) Array(Float)
+        thumbAngle_threshold: (2x1) Array(Float)
         fingerAngle_threshold: (Float)
         useDepth: Bool
             if True, use measured depth to acquire angles and hand position
             if False, use synthetic data
-
         fingerAngles: Dict
         slidingWindow: (10x1) Array
             Can be used to choose current gesture from an average
@@ -41,7 +40,6 @@ class HandModel():
             current detected gesture
         acceptedDepthVar: Float
             If the variance in depth is too large, the measurement should not be trusted
-
     '''
     def __init__(self, type, workspace, wristAngle_threshold, thumbAngle_threshold, fingerAngle_threshold, useDepth):
         self.type = type
@@ -92,6 +90,121 @@ class HandModel():
             
             self.calculateFingerAngles()
             self.estimateGesture()
+
+    def getPalmLocation(self):
+        '''
+        Function which estimates the palm location in the image frame.
+
+        Estimates the palm location by averaging over the positions of points
+        0, 1, 5, 9, 13, and 17. Visit MediaPipe Hand section for further
+        information on landmark positions
+
+        Out:
+            (3x1) Array(Float)
+        '''
+        try:
+            latestLandmarks = self.slidingWindow[-1]
+        except Exception:
+            print("Error getting palm location: No hand detected yet!")
+            return [1/2, 1/2, 0]
+        x = np.array([latestLandmarks[0][0]['X'], latestLandmarks[0][1]['X'], latestLandmarks[0][5]['X'],
+                    latestLandmarks[0][9]['X'], latestLandmarks[0][13]['X'], latestLandmarks[0][17]['X']]).mean()
+        y = np.array([latestLandmarks[0][0]['Y'], latestLandmarks[0][1]['Y'], latestLandmarks[0][5]['Y'],
+                    latestLandmarks[0][9]['Y'], latestLandmarks[0][13]['Y'], latestLandmarks[0][17]['Y']]).mean()
+        z = np.array([latestLandmarks[0][0]['Z'], latestLandmarks[0][1]['Z'], latestLandmarks[0][5]['Z'],
+                    latestLandmarks[0][9]['Z'], latestLandmarks[0][13]['Z'], latestLandmarks[0][17]['Z']]).mean()
+        return np.array([x, y, z])
+
+    def getHandDepth(self, overrideDepthSetting=False):
+        '''
+        Function which estimates the measured hand depth.
+
+        The estimate is the median of the measured depth at the image
+        position of all 21 landmarks. The median reduces the effects from outliers,
+        which may occure when a finger is misdetected, causing its depth to be that
+        of the background.
+
+        In:
+            overrideDepthSetting: Bool
+                if True allways use measured depth over synthetic
+        Out:
+            estDepth: Float
+            var: Float
+        '''
+        try:
+            latestLandmarks = self.slidingWindow[-1]
+        except Exception:
+            print("Error getting hand depth: No hand detected yet!")
+            return 0, 0
+        depthSensor = "Depth" if self.useDepth else "Z"
+
+        if overrideDepthSetting: depthSensor = "Depth"
+
+        depths = np.array([round(latestLandmarks[0][i][depthSensor], 3) for i in range(len(latestLandmarks[0]))])
+        var = np.var(depths)
+        estDepth = np.median(depths) # Reduces the effect from outliers
+
+        if var < self.acceptedDepthVar or len(self.depthWindow) == 0:
+            self.depthWindow.append([estDepth, var])
+            if len(self.depthWindow) > self.windowSize:
+                self.depthWindow.pop(0)
+        else:
+            estDepth = np.mean(np.array(self.depthWindow)[:,0])
+            var = np.var(np.array(self.depthWindow)[:,0])
+        # print(f"Estimator :\t{estDepth:.3f}\t\t Mean: {mean:.3f}\t\tVar: \t{var:.3f} \r", end="")
+        return estDepth, var
+
+    def getHandDepthSensor(self):
+        '''
+        Function which returns the depth of the hand
+
+        Out:
+            depth: Float
+        '''
+        depth,_ = self.getHandDepth(overrideDepthSetting=True)
+        return depth
+
+    def getWorkspaceLocation(self, imgHeight, imgWidth):
+        '''
+        Returns the workspace section in which the hand is located
+
+        Workspace sections could be any of the following:
+        WS_MOVE_FORWARD
+        WS_MOVE_BACKWARD
+        WS_TURN_LEFT
+        WS_TURN_RIGHT
+        WS_MISC
+
+        Out: Int
+        '''
+        palmPos = np.array([int(self.getPalmLocation()[0]*imgWidth), int(self.getPalmLocation()[1]*imgHeight)])
+
+        if self.workspace["MoveBackward"][palmPos[0]][palmPos[1]] == True:
+            return WS_MOVE_BACKWARD
+        elif self.workspace["TurnLeft"][palmPos[0]][palmPos[1]] == True:
+            return WS_TURN_LEFT
+        elif self.workspace["TurnRight"][palmPos[0]][palmPos[1]] == True:
+            return WS_TURN_RIGHT
+        elif self.workspace["Misc"][palmPos[0]][palmPos[1]] == True:
+            return WS_MISC
+        elif self.workspace["MoveForward"][palmPos[0]][palmPos[1]] == True:
+            return WS_MOVE_FORWARD
+        
+
+    def getFingerAngles(self):
+        '''
+        Function which returns finger angles
+
+        Out:
+            (Dict = "0"-"4": (1x2) Array(Float))
+        '''
+        return self.fingerAngles
+
+    def getCurrentGesture(self):
+        '''
+        Function which returns the current gesture
+        '''
+        return self.gesture
 
     def calculateFingerAngles(self):
         '''
@@ -302,119 +415,3 @@ class HandModel():
             self.gesture = STOP
         else:
             self.gesture = -1
-
-
-    def getPalmLocation(self):
-        '''
-        Function which estimates the palm location in the image frame.
-
-        Estimates the palm location by averaging over the positions of points
-        0, 1, 5, 9, 13, and 17. Visit MediaPipe Hand section for further
-        information on landmark positions
-
-        Out:
-            (3x1) Array(Float)
-        '''
-        try:
-            latestLandmarks = self.slidingWindow[-1]
-        except Exception:
-            print("Error getting palm location: No hand detected yet!")
-            return [1/2, 1/2, 0]
-        x = np.array([latestLandmarks[0][0]['X'], latestLandmarks[0][1]['X'], latestLandmarks[0][5]['X'],
-                    latestLandmarks[0][9]['X'], latestLandmarks[0][13]['X'], latestLandmarks[0][17]['X']]).mean()
-        y = np.array([latestLandmarks[0][0]['Y'], latestLandmarks[0][1]['Y'], latestLandmarks[0][5]['Y'],
-                    latestLandmarks[0][9]['Y'], latestLandmarks[0][13]['Y'], latestLandmarks[0][17]['Y']]).mean()
-        z = np.array([latestLandmarks[0][0]['Z'], latestLandmarks[0][1]['Z'], latestLandmarks[0][5]['Z'],
-                    latestLandmarks[0][9]['Z'], latestLandmarks[0][13]['Z'], latestLandmarks[0][17]['Z']]).mean()
-        return np.array([x, y, z])
-
-    def getHandDepth(self, overrideDepthSetting=False):
-        '''
-        Function which estimates the measured hand depth.
-
-        The estimate is the median of the measured depth at the image
-        position of all 21 landmarks. The median reduces the effects from outliers,
-        which may occure when a finger is misdetected, causing its depth to be that
-        of the background.
-
-        In:
-            overrideDepthSetting: Bool
-                if True allways use measured depth over synthetic
-        Out:
-            estDepth: Float
-            var: Float
-        '''
-        try:
-            latestLandmarks = self.slidingWindow[-1]
-        except Exception:
-            print("Error getting hand depth: No hand detected yet!")
-            return 0, 0
-        depthSensor = "Depth" if self.useDepth else "Z"
-
-        if overrideDepthSetting: depthSensor = "Depth"
-
-        depths = np.array([round(latestLandmarks[0][i][depthSensor], 3) for i in range(len(latestLandmarks[0]))])
-        var = np.var(depths)
-        estDepth = np.median(depths) # Reduces the effect from outliers
-
-        if var < self.acceptedDepthVar or len(self.depthWindow) == 0:
-            self.depthWindow.append([estDepth, var])
-            if len(self.depthWindow) > self.windowSize:
-                self.depthWindow.pop(0)
-        else:
-            estDepth = np.mean(np.array(self.depthWindow)[:,0])
-            var = np.var(np.array(self.depthWindow)[:,0])
-        # print(f"Estimator :\t{estDepth:.3f}\t\t Mean: {mean:.3f}\t\tVar: \t{var:.3f} \r", end="")
-        return estDepth, var
-
-    def getHandDepthSensor(self):
-        '''
-        Function which returns the depth of the hand
-
-        Out:
-            depth: Float
-        '''
-        depth,_ = self.getHandDepth(overrideDepthSetting=True)
-        return depth
-
-    def getWorkspaceLocation(self, imgHeight, imgWidth):
-        '''
-        Returns the workspace section in which the hand is located
-
-        Workspace sections could be any of the following:
-        WS_MOVE_FORWARD
-        WS_MOVE_BACKWARD
-        WS_TURN_LEFT
-        WS_TURN_RIGHT
-        WS_MISC
-
-        Out: Int
-        '''
-        palmPos = np.array([int(self.getPalmLocation()[0]*imgWidth), int(self.getPalmLocation()[1]*imgHeight)])
-
-        if self.workspace["MoveBackward"][palmPos[0]][palmPos[1]] == True:
-            return WS_MOVE_BACKWARD
-        elif self.workspace["TurnLeft"][palmPos[0]][palmPos[1]] == True:
-            return WS_TURN_LEFT
-        elif self.workspace["TurnRight"][palmPos[0]][palmPos[1]] == True:
-            return WS_TURN_RIGHT
-        elif self.workspace["Misc"][palmPos[0]][palmPos[1]] == True:
-            return WS_MISC
-        elif self.workspace["MoveForward"][palmPos[0]][palmPos[1]] == True:
-            return WS_MOVE_FORWARD
-        
-
-    def getFingerAngles(self):
-        '''
-        Function which returns finger angles
-
-        Out:
-            (Dict = "0"-"4": (1x2) Array(Float))
-        '''
-        return self.fingerAngles
-
-    def getCurrentGesture(self):
-        '''
-        Function which returns the current gesture
-        '''
-        return self.gesture

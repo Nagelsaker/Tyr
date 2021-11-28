@@ -20,7 +20,7 @@ class FSM():
     ----------
         depthRange : 2x1 Array(Float)
             the range from min to max, which yields max to min manipulator movement
-        pathTime: float
+        pathTime: Float
             time it takes for the manipulator to move to desired position
         imgWidth: int
             image width
@@ -36,7 +36,8 @@ class FSM():
             hand model object
         controller: Controller
             controller object
-        imgLM:
+        obstacles: (5x1) Array(Obstacle)
+        imgLM: Array
             current workspace image with hand landmarks drawn
     '''
     def __init__(self):
