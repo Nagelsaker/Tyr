@@ -53,7 +53,6 @@ class SkeletonWidget(QWidget):
 
         self.landmarks = landmarks
 
-        # print(landmarks)
         X = [d["X"] for d in landmarks]
         Y = [d["Y"] for d in landmarks]
         if self.useDepth:

@@ -94,8 +94,8 @@ class HandTracking:
                         X = data_point.x
                         Y = data_point.y
                         Z = data_point.z
-                        xPx = min([int(X*imgWidth), 1920-1])
-                        yPx = min([int(Y*imgHeight), 1080-1])
+                        xPx = min([int(X*imgWidth), imgWidth-1])
+                        yPx = min([int(Y*imgHeight), imgHeight-1])
                         keypoints.append({
                             'X': X,
                             'Y': Y,

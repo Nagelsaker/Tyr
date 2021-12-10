@@ -304,7 +304,7 @@ def visualize(results, image, workspaceOverlay):
     if cv2.waitKey(5) & 0xFF == 27:
         return
 
-def generateFilename(pathToDataset, type, name=None):
+def generateFilename(pathToDataset, type, name=None, removeSuffix=False):
     nrOfFiles = 0
     for filename in os.listdir(pathToDataset):
         if filename.endswith(f".{type}"):
@@ -316,8 +316,7 @@ def generateFilename(pathToDataset, type, name=None):
     
     generatedFname = f"{pathToDataset}{nrOfFiles+1}_"
     generatedFname += name if name is not None else ""
-    generatedFname += f".{type}"
+    if not removeSuffix: generatedFname += f".{type}"
     return generatedFname
-
 if __name__ == "__main__":
     workspaceOverlay, workspaceSections = generateWorkspace(1080, 1920, 375, 800, 100, 30)

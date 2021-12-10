@@ -1,10 +1,14 @@
 import json
+import csv
+import time
 import numpy as np
+from datetime import date
 from Hand.HandTracking import HandTracking
-from Utility.utils import drawLandmarks, loadWorkspace
+from Utility.utils import drawLandmarks, loadWorkspace, generateFilename
 from Comms.Controller import Controller, Obstacle
 from PyQt5.QtGui import QImage
 from Hand.HandModel import *
+
 
 
 class FSM():
@@ -40,6 +44,8 @@ class FSM():
         imgLM: Array
             current workspace image with hand landmarks drawn
     '''
+    STATE = ST_STOP
+
     def __init__(self):
         f = open("settings.json")
         settings = json.load(f)
@@ -71,6 +77,22 @@ class FSM():
         self.hm = HandModel("left", self.workspaceSections, wristAngle_threshold, thumbAngle_threshold, fingerAngle_threshold, useDepth)
         self.controller = Controller(self.imgWidth, self.imgHeight, Kp=self.Kp_default, pathTime=self.pathTime, obstacles=self.obstacles)
         self.imgLM = None
+
+        # Setup logs
+        self.pathToLog = settings["pathToLog"]
+        self.writeLogs = settings["writeLogs"] == 1
+        self.pathToLogPose = ""
+        self.pathToLogFSMState = ""
+        self.pathToLogHandPoints = ""
+        self.pathToLogTimeSteps = ""
+        self.curDate = date.today().strftime("%Y_%m_%d")
+        self.curTime = 0
+        self.startTime = time.time()
+        if self.writeLogs:
+            self.pathToLogPose = generateFilename(self.pathToLog, "csv", f"{self.curDate}_RobotPoseLogger")
+            self.pathToLogFSMState = generateFilename(self.pathToLog, "csv", f"{self.curDate}_FSMStateLogger")
+            self.pathToLogHandPoints = generateFilename(self.pathToLog, "csv", f"{self.curDate}_HandPointsLogger")
+            self.pathToLogTimeSteps = generateFilename(self.pathToLog, "csv", f"{self.curDate}_TimeStepLogger")
 
     def setWristThreshold(self, threshold):
         '''
@@ -129,7 +151,7 @@ class FSM():
                 currentGesture = self.hm.getCurrentGesture()
                 wsLoc = self.hm.getWorkspaceLocation(self.imgHeight, self.imgWidth)
 
-                if len(handPoints) != 0:
+                if len(handPoints) != 0 and thread is not None:
                     # Send Current gesture to GUI application
                     thread.activateGesture.emit(currentGesture)
                     thread.updateSkeleton.emit(handPoints[0])
@@ -137,32 +159,47 @@ class FSM():
 
                 # FSM
                 usePrecision = (currentGesture==PRECISION)
+                
 
                 if wsLoc == WS_TURN_LEFT and currentGesture != STOP:
+                    self.STATE = ST_TURN_LEFT
                     self.controller.updateRobotPose(updateX=True, updateY=True)
                     self.controller.turnHorizontally(direction="left", precision=usePrecision)
                 elif wsLoc == WS_TURN_RIGHT and currentGesture != STOP:
+                    self.STATE = ST_TURN_RIGHT
                     self.controller.updateRobotPose(updateX=True, updateY=True)
                     self.controller.turnHorizontally(direction="right", precision=usePrecision)
                 elif wsLoc == WS_MOVE_FORWARD and currentGesture != STOP:
+                    self.STATE = ST_MOVE_FORWARD
                     self.controller.updateRobotPose(updateX=True, updateY=True)
                     self.controller.incrementRadius(direction="forward", precision=usePrecision)
                 elif wsLoc == WS_MOVE_BACKWARD and currentGesture != STOP:
+                    self.STATE = ST_MOVE_BACKWARD
                     self.controller.updateRobotPose(updateX=True, updateY=True)
                     self.controller.incrementRadius(direction="backward", precision=usePrecision)
                 elif wsLoc == WS_MISC and currentGesture == GRIP:
+                    self.STATE = ST_GRIP
                     self.controller.incrementGripper(direction="close")
                 elif wsLoc == WS_MISC and currentGesture == UNGRIP:
+                    self.STATE = ST_UNGRIP
                     self.controller.incrementGripper(direction="open")
                 elif wsLoc == WS_MISC and currentGesture == MOVE_HEIGHT:
+                    self.STATE = ST_HEIGHT
                     self.controller.updateRobotPose(updateZ=True)
                     self.controller.incrementHeight(depth=self.hm.getHandDepthSensor(), range=self.depthRange)
                 elif wsLoc == WS_MISC and currentGesture == TILT_UP:
+                    self.STATE = ST_TILT_UP
                     self.controller.incrementOrientation(direction="up")
                 elif wsLoc == WS_MISC and currentGesture == TILT_DOWN:
+                    self.STATE = ST_TILT_DOWN
                     self.controller.incrementOrientation(direction="down")
                 else:
-                    continue # Either STOP or unknown command
+                    self.STATE = ST_STOP
+                
+                # Logging
+                if self.writeLogs:
+                    pose = self.controller.getPose()
+                    self.log(pose, self.STATE, handPoints)
 
 
         except Exception as e:
@@ -171,6 +208,65 @@ class FSM():
             self.controller.endController()
             if thread is not None:
                 thread.quit()
+
+    def log(self, pose=None, state=None, handPoints=None):
+        self.logRobotPose(pose)
+        self.logFSMState(state)
+        self.logHandPoints(handPoints)
+        t = time.time() - self.startTime
+        self.logTimeSteps(t)
+
+    def logRobotPose(self, pose):
+        with open(f"{self.pathToLogPose}", "a") as fp:
+            writer = csv.writer(fp)
+
+            if pose is None:
+                writer.writerow(["None"])
+                return
+
+            formattedPose = []
+            for key, value in pose.items():
+                formattedPose.append(key)
+                for _, val2 in value.items():
+                    formattedPose.append(val2)
+            writer.writerow(formattedPose)
+
+    def logFSMState(self, state):
+        with open(f"{self.pathToLogFSMState}", "a") as fp:
+            writer = csv.writer(fp)
+
+            if state is None:
+                writer.writerow(["None"])
+                return
+            
+            writer.writerow(str(state))
+
+
+    def logHandPoints(self, handPoints):
+        with open(f"{self.pathToLogHandPoints}", "a") as fp:
+            writer = csv.writer(fp)
+
+            if handPoints == {}:
+                writer.writerow(["None"])
+                return
+            
+            formattedHP = []
+            for i in range(len(handPoints[0])):
+                formattedHP.append(i)
+                for _, val in handPoints[0][i].items():
+                    formattedHP.append(val)
+            
+            writer.writerow(formattedHP)
+    
+    def logTimeSteps(self, t):
+        with open(f"{self.pathToLogTimeSteps}", "a") as fp:
+            writer = csv.writer(fp)
+
+            if t is None:
+                writer.writerow(["None"])
+                return
+            
+            writer.writerow([str(t)])
 
 
 if __name__ == "__main__":
