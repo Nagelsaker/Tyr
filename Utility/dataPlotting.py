@@ -228,9 +228,17 @@ def plotPoseAndStates(poseData, stateData, timeSteps, prefix):
     axs[4].set(xlabel="Time (s)")
     axs[4].set_title("State")
     axs[4].grid()
+
+    # Plotting State
+    # axs[5].step(T, np.rad2deg(eulerAnglesRad[:-5,2] - np.arctan2(Y, X)[5:]), label="State")
+    # axs[5].legend()
+    # axs[5].set(ylabel="States")
+    # axs[5].set(xlabel="Time (s)")
+    # axs[5].set_title("State")
+    # axs[5].grid()
     
-    # plt.show()
-    plt.savefig(f"{prefix}_Pose_and_States.eps")
+    plt.show()
+    # plt.savefig(f"{prefix}_Pose_and_States.eps")
 
 if __name__ == "__main__":
     # Load data

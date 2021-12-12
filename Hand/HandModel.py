@@ -57,6 +57,8 @@ class HandModel():
         self.gesture = -1
         self.acceptedDepthVar = 0.03
 
+        self.handPresent = False
+
     def setWristThreshold(self, threshold):
         '''
         In:
@@ -90,6 +92,9 @@ class HandModel():
             
             self.calculateFingerAngles()
             self.estimateGesture()
+            self.handPresent = True
+        else:
+            self.handPresent = False
 
     def getPalmLocation(self):
         '''
@@ -177,6 +182,10 @@ class HandModel():
 
         Out: Int
         '''
+
+        if not self.handPresent:
+            return WS_HAND_NOT_PRESENT
+
         palmPos = np.array([int(self.getPalmLocation()[0]*imgWidth), int(self.getPalmLocation()[1]*imgHeight)])
 
         if self.workspace["MoveBackward"][palmPos[0]][palmPos[1]] == True:
