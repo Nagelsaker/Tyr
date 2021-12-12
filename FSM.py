@@ -56,7 +56,7 @@ class FSM():
         self.imgHeight = settings["imgHeight"]
         self.camSN = settings["camSN"]
         useDepth = settings["useDepth"] == 1
-        # Kp=[K_p_psi, K_p_r, K_p_z, K_p_theta, K_p_phi]
+        # Kp=[K_p_beta, K_p_r, K_p_z, K_p_theta, K_p_phi]
         self.Kp_default = settings["Kp_default"]
         wristAngle_threshold = settings["wristAngle_threshold"]
         thumbAngle_threshold = settings["thumbAngle_threshold"]

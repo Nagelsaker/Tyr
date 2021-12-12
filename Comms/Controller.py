@@ -27,7 +27,7 @@ class Controller():
         imgWidth: Int
         imgHeight: Int
 
-        K_p_psi: Float
+        K_p_beta: Float
             Proportionality control value for the horizontal turning velocity
         K_p_r: Float
             Proportionality control value for the horizontal radial velocity
@@ -65,7 +65,7 @@ class Controller():
         self.imgWidth = imgWidth
         self.imgHeight = imgHeight
 
-        self.K_p_psi = Kp[0]
+        self.K_p_beta = Kp[0]
         self.K_p_r = Kp[1]
         self.K_p_z = Kp[2]
         self.K_p_theta = Kp[3]
@@ -148,7 +148,7 @@ class Controller():
         y = self.pose["position"]["y"]
         z = self.pose["position"]["z"]
         r = np.sqrt(x**2 + y**2)
-        psi = np.arctan2(y, x)
+        beta = np.arctan2(y, x)
 
         if precision == True:
             r_delta = self.K_p_r / 5
@@ -161,8 +161,8 @@ class Controller():
             r_delta *= -1
 
         r_new = r + r_delta
-        x_new = r_new * np.cos(psi)
-        y_new = r_new * np.sin(psi)
+        x_new = r_new * np.cos(beta)
+        y_new = r_new * np.sin(beta)
 
         newPose = copy.deepcopy(self.pose)
         newPose["position"]["x"] = x_new
@@ -223,8 +223,8 @@ class Controller():
         '''
         Method which calculates the manipulators new horizontal angular position.
 
-        Calculates the manipulators polar coordinates, adjusts the angle psi according
-        to the K_p_psi value, recalculates the cartesian coordinates. Then it checks whether
+        Calculates the manipulators polar coordinates, adjusts the angle beta according
+        to the K_p_beta value, recalculates the cartesian coordinates. Then it checks whether
         the new pose does not collide with obstacles, and is inside the manipulators
         workspace. If these requirements are fulfilled, the pose is sent as a request
         to the OpenManipulator, which has its own safety checks for new poses.
@@ -241,21 +241,21 @@ class Controller():
         z = self.pose["position"]["z"]
 
         r = np.sqrt(x**2 + y**2)
-        psi = np.arctan2(y, x)
+        beta = np.arctan2(y, x)
 
         if precision == True:
-            psi_delta = self.K_p_psi / 5
+            beta_delta = self.K_p_beta / 5
         else:
-            psi_delta = self.K_p_psi
+            beta_delta = self.K_p_beta
         
         if direction == "left":
-            psi_delta *= 1
+            beta_delta *= 1
         elif direction == "right":
-            psi_delta *= -1
+            beta_delta *= -1
 
-        psi_new = psi + psi_delta
-        x_new = r * np.cos(psi_new)
-        y_new = r * np.sin(psi_new)
+        beta_new = beta + beta_delta
+        x_new = r * np.cos(beta_new)
+        y_new = r * np.sin(beta_new)
 
         newPose = copy.deepcopy(self.pose)
         newPose["position"]["x"] = x_new
