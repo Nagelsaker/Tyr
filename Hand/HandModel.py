@@ -217,10 +217,10 @@ class HandModel():
 
     def calculateFingerAngles(self):
         '''
-        Function which calculates theta and beta angles for all links in each finger.
+        Function that calculates delta and gamma angles for all links in each finger.
 
-        Theta represents the angle between link (i-1) and (i) in the xy plane,
-        while beta represents the angle in the xz plane. Keep in mind that
+        Delta represents the angle between link (i-1) and (i) in the xy plane,
+        while gamma represents the angle in the xz plane. Keep in mind that
         new rotations are multiplied from the right according to 'current frames',
         the alternative would be multiplying to the left w.r.t the fixed initial axis.
         '''
@@ -236,12 +236,12 @@ class HandModel():
         z_0_w = latestLandmarks[0][0][depthSensor]
         X_0_w = np.array([x_0_w, y_0_w, z_0_w, 1])
         rho_0 = np.sqrt(x_0_w**2 + y_0_w**2)
-        theta_0 = np.arctan2(y_0_w, x_0_w)
-        beta_0 = 0
+        delta_0 = np.arctan2(y_0_w, x_0_w)
+        gamma_0 = 0
 
         t_0 = np.array([X_0_w[0], X_0_w[1], X_0_w[2]])
         # A transformation matrix H_ij transforms points in coordinate system i to j.
-        H_w_0 = self.calculateTransformation(theta_0, beta_0, t_0)
+        H_w_0 = self.calculateTransformation(delta_0, gamma_0, t_0)
 
         for i in range(1, 20, 4):
             angles = []
@@ -259,13 +259,13 @@ class HandModel():
             rho_1 = np.linalg.norm(X_1_0[:3])
             d_1 = X_1_0[2]
             a_1 = np.sqrt(X_1_0[0]**2 + X_1_0[1]**2)
-            theta_1 = np.arctan2(X_1_0[1], X_1_0[0]) # Use arctan2 to get angles from all quadrants
-            beta_1 = -np.arctan2(d_1, a_1)
+            delta_1 = np.arctan2(X_1_0[1], X_1_0[0]) # Use arctan2 to get angles from all quadrants
+            gamma_1 = -np.arctan2(d_1, a_1)
             
             t_1 = np.array([X_1_0[0], X_1_0[1], X_1_0[2]])
             # Angles between link 0 and link 1 does not give any useful information
-            # angles.append([theta_1, beta_1])
-            H_0_1 = self.calculateTransformation(theta_1, beta_1, t_1)
+            # angles.append([delta_1, gamma_1])
+            H_0_1 = self.calculateTransformation(delta_1, gamma_1, t_1)
 
             # Joint 2
             X_2_w = np.array([latestLandmarks[0][joint2]['X'],
@@ -276,12 +276,12 @@ class HandModel():
             rho_2 = np.linalg.norm(X_2_1[:3])
             d_2 = X_2_1[2]
             a_2 = np.sqrt(X_2_1[0]**2 + X_2_1[1]**2)
-            theta_2 = np.arctan2(X_2_1[1], X_2_1[0]) # Use arctan2 to get angles from all quadrants
-            beta_2 = -np.arctan2(d_2, a_2)
+            delta_2 = np.arctan2(X_2_1[1], X_2_1[0]) # Use arctan2 to get angles from all quadrants
+            gamma_2 = -np.arctan2(d_2, a_2)
             
             t_2 = np.array([X_2_1[0], X_2_1[1], X_2_1[2]])
-            angles.append([theta_2, beta_2])
-            H_1_2 = self.calculateTransformation(theta_2, beta_2, t_2)
+            angles.append([delta_2, gamma_2])
+            H_1_2 = self.calculateTransformation(delta_2, gamma_2, t_2)
 
             # Joint 3
             X_3_w = np.array([latestLandmarks[0][joint3]['X'],
@@ -292,12 +292,12 @@ class HandModel():
             rho_3 = np.linalg.norm(X_3_2[:3])
             d_3 = X_3_2[2]
             a_3 = np.sqrt(X_3_2[0]**2 + X_3_2[1]**2)
-            theta_3 = np.arctan2(X_3_2[1], X_3_2[0]) # Use arctan2 to get angles from all quadrants
-            beta_3 = -np.arctan2(d_3, a_3)
+            delta_3 = np.arctan2(X_3_2[1], X_3_2[0]) # Use arctan2 to get angles from all quadrants
+            gamma_3 = -np.arctan2(d_3, a_3)
             
             t_3 = np.array([X_3_2[0], X_3_2[1], X_3_2[2]])
-            angles.append([theta_3, beta_3])
-            H_2_3 = self.calculateTransformation(theta_3, beta_3, t_3)
+            angles.append([delta_3, gamma_3])
+            H_2_3 = self.calculateTransformation(delta_3, gamma_3, t_3)
 
             # Joint 4
             X_4_w = np.array([latestLandmarks[0][joint4]['X'],
@@ -308,24 +308,24 @@ class HandModel():
             rho_4 = np.linalg.norm(X_4_3[:3])
             d_4 = X_4_3[2]
             a_4 = np.sqrt(X_4_3[0]**2 + X_4_3[1]**2)
-            theta_4 = np.arctan2(X_4_3[1], X_4_3[0]) # Use arctan2 to get angles from all quadrants
-            beta_4 = -np.arctan2(d_4, a_4)
+            delta_4 = np.arctan2(X_4_3[1], X_4_3[0]) # Use arctan2 to get angles from all quadrants
+            gamma_4 = -np.arctan2(d_4, a_4)
             
             t_4 = np.array([X_4_3[0], X_4_3[1], X_4_3[2]])
-            angles.append([theta_4, beta_4])
-            H_3_4 = self.calculateTransformation(theta_4, beta_4, t_4)
+            angles.append([delta_4, gamma_4])
+            H_3_4 = self.calculateTransformation(delta_4, gamma_4, t_4)
 
             self.fingerAngles[int((i-1)/4)] = angles
 
 
-    def calculateTransformation(self, theta, beta, translation):
+    def calculateTransformation(self, delta, gamma, translation):
         '''
         Calculates transformation matrix from one finger joint (i-1) to joint (i)
 
         In:
-            theta: (Float)
+            delta: (Float)
                 radians, rotation along z
-            beta: (Float)
+            gamma: (Float)
                 radians, rotation along y
             translation: (3x1 Array(Float))
                 translation from (i-1) to (i)
@@ -333,8 +333,8 @@ class HandModel():
         Out:
             H: (4x4) Array(Float)
         '''
-        R_z = utils.zRotToMat(theta)
-        R_y = utils.yRotToMat(beta)
+        R_z = utils.zRotToMat(delta)
+        R_y = utils.yRotToMat(gamma)
 
         R = R_z @ R_y
 
