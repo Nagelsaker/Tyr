@@ -227,10 +227,13 @@ class HandModel():
         # Calculate transformation from world to wrist point (0)
         # x_ij is x value of a point i in the coordinate system j.
         # X_ij is the homogeneous point i in the coordinate system j
+        depthSensor = "Depth" if self.useDepth else "Z"
+        # depthSensor = "Z"
+
         latestLandmarks = self.slidingWindow[-1]
         x_0_w = latestLandmarks[0][0]['X']
         y_0_w = latestLandmarks[0][0]['Y']
-        z_0_w = latestLandmarks[0][0]['Z']
+        z_0_w = latestLandmarks[0][0][depthSensor]
         X_0_w = np.array([x_0_w, y_0_w, z_0_w, 1])
         rho_0 = np.sqrt(x_0_w**2 + y_0_w**2)
         theta_0 = np.arctan2(y_0_w, x_0_w)
@@ -250,7 +253,7 @@ class HandModel():
             # Joint 1
             X_1_w = np.array([latestLandmarks[0][joint1]['X'],
                              latestLandmarks[0][joint1]['Y'],
-                             latestLandmarks[0][joint1]['Z'],
+                             latestLandmarks[0][joint1][depthSensor],
                              1])
             X_1_0 = H_w_0 @ X_1_w
             rho_1 = np.linalg.norm(X_1_0[:3])
@@ -267,7 +270,7 @@ class HandModel():
             # Joint 2
             X_2_w = np.array([latestLandmarks[0][joint2]['X'],
                              latestLandmarks[0][joint2]['Y'],
-                             latestLandmarks[0][joint2]['Z'],
+                             latestLandmarks[0][joint2][depthSensor],
                              1])
             X_2_1 = H_0_1 @ H_w_0 @ X_2_w
             rho_2 = np.linalg.norm(X_2_1[:3])
@@ -283,7 +286,7 @@ class HandModel():
             # Joint 3
             X_3_w = np.array([latestLandmarks[0][joint3]['X'],
                              latestLandmarks[0][joint3]['Y'],
-                             latestLandmarks[0][joint3]['Z'],
+                             latestLandmarks[0][joint3][depthSensor],
                              1])
             X_3_2 = H_1_2 @ H_0_1 @ H_w_0 @ X_3_w
             rho_3 = np.linalg.norm(X_3_2[:3])
@@ -299,7 +302,7 @@ class HandModel():
             # Joint 4
             X_4_w = np.array([latestLandmarks[0][joint4]['X'],
                              latestLandmarks[0][joint4]['Y'],
-                             latestLandmarks[0][joint4]['Z'],
+                             latestLandmarks[0][joint4][depthSensor],
                              1])
             X_4_3 = H_2_3 @ H_1_2 @ H_0_1 @ H_w_0 @ X_4_w
             rho_4 = np.linalg.norm(X_4_3[:3])

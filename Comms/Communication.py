@@ -126,6 +126,8 @@ class SetJointPositionClient(Node):
         Function which requests fourth joint position
 
         Assuming joint = joint4
+
+        Joint positions are given in radians
         '''
 
         minVal = -1.80
