@@ -4,10 +4,7 @@ import numpy as np
 from constants import *
 from matplotlib import pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
-from matplotlib.colors import from_levels_and_colors
 from matplotlib.collections import LineCollection
-from matplotlib.colors import ListedColormap, BoundaryNorm
-from mpl_toolkits.mplot3d import Axes3D
 
 state = {
     ST_STOP : "STOP",

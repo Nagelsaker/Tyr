@@ -1,0 +1,9 @@
+PyQt5
+qdarkstyle
+numpy
+mediapipe
+scipy
+matplotlib
+cv2
+rclpy ROS Client Library for Python
+pyrealsense2

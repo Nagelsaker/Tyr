@@ -382,6 +382,7 @@ class HandModel():
         MOVE_HEIGHT
         STOP
         '''
+        # print(f"{self.openFingers}\t {np.rad2deg(np.array(self.fingerAngles[2][1:])[:,1])} \t\t\t\t \r", end="")
         # Thumb
         finger = self.fingerAngles[0]
         angles = np.array(self.fingerAngles[0][1:])[:,0]
